@@ -13,116 +13,107 @@ URL_USERS = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:
 
 st.set_page_config(page_title="SQM VANTAGE", layout="wide")
 
-# --- ZARZĄDZANIE SESJĄ (COOKIES) ---
+# --- SYSTEM LOGOWANIA ---
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
 def get_manager():
     return stx.CookieManager()
 
 cookie_manager = get_manager()
 
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
-
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=60)
 def fetch_users():
     try:
         df = pd.read_csv(URL_USERS)
         return dict(zip(df['username'].astype(str), df['password'].astype(str)))
     except:
-        return {"admin": "5f4dcc3b5aa765d61d8327deb882cf99"} # hasło: password
+        # HASŁO RATUNKOWE: Jeśli arkusz nie działa, login: admin, hasło: SQM2026!
+        return {"admin": "7990494490f237f37435f3089d38c1a6007e0c8b055371190458df8d03f0b07b"}
 
 user_db = fetch_users()
-saved_user = cookie_manager.get(cookie="sqm_vantage_session")
 
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
+if "auth" not in st.session_state:
+    st.session_state.auth = False
 
+# Sprawdź ciasteczko
+saved_user = cookie_manager.get(cookie="sqm_session")
 if saved_user in user_db:
-    st.session_state.authenticated = True
+    st.session_state.auth = True
     st.session_state.user = saved_user
 
-# --- EKRAN LOGOWANIA ---
-if not st.session_state.authenticated:
-    st.markdown("<style>.stApp {background: #0f172a; color: white;}</style>", unsafe_allow_html=True)
-    c1, c2, c3 = st.columns([1,2,1])
-    with c2:
+if not st.session_state.auth:
+    st.markdown("<style>.stApp {background: #0f172a;}</style>", unsafe_allow_html=True)
+    _, col, _ = st.columns([1,2,1])
+    with col:
         st.image("https://www.sqm.pl/wp-content/themes/sqm/img/logo-sqm.png", width=200)
         st.title("Logowanie SQM VANTAGE")
         u = st.text_input("Użytkownik")
         p = st.text_input("Hasło", type="password")
         if st.button("ZALOGUJ"):
             if u in user_db and user_db[u] == hash_password(p):
-                st.session_state.authenticated = True
+                st.session_state.auth = True
                 st.session_state.user = u
-                cookie_manager.set("sqm_vantage_session", u, expires_at=datetime.now() + timedelta(days=30))
+                cookie_manager.set("sqm_session", u, expires_at=datetime.now() + timedelta(days=30))
                 st.rerun()
             else:
-                st.error("Nieprawidłowe dane logowania.")
+                st.error("Błędne dane. Upewnij się, że hash w Google Sheets jest poprawny.")
     st.stop()
 
-# --- CUSTOM CSS ---
-st.markdown("""
-    <style>
-    .stApp { background: radial-gradient(circle at 50% 10%, #1e293b 0%, #030508 100%); color: #e2e8f0; }
-    .price-container { background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 30px; padding: 40px; backdrop-filter: blur(25px); margin-top: 20px; position: relative; }
-    .price-container::after { content: ""; position: absolute; top: 40px; left: 0; width: 5px; height: 80px; background: #ed8936; border-radius: 0 5px 5px 0; }
-    .price-label { font-size: 0.9rem; color: #ed8936; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; }
-    .price-value { font-size: 5.5rem; font-weight: 900; color: #ffffff; line-height: 1; margin: 15px 0; letter-spacing: -2px; }
-    .components-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-top: 30px; }
-    .component-item { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); padding: 14px 18px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; }
-    .comp-name { font-size: 0.8rem; color: #94a3b8; }
-    .comp-price { font-size: 1rem; font-weight: 700; color: #f8fafc; }
-    </style>
-""", unsafe_allow_html=True)
-
-# --- DANE I LOGIKA ---
+# --- GŁÓWNA APLIKACJA ---
 @st.cache_data(ttl=300)
-def fetch_data():
-    try:
-        b = pd.read_csv(URL_BAZA); o = pd.read_csv(URL_OPLATY)
-        b.columns = b.columns.str.strip(); o.columns = o.columns.str.strip()
-        def cln(v):
-            if pd.isna(v): return 0.0
-            s = re.sub(r'[^\d.]', '', str(v).replace(',', '.'))
-            return float(s) if s else 0.0
-        for c in ['Eksport', 'Import', 'Postoj']:
-            if c in b.columns: b[c] = b[c].apply(cln)
-        o['Wartosc'] = o['Wartosc'].apply(cln)
-        return b, o
-    except: return None, None
+def load_data():
+    b = pd.read_csv(URL_BAZA)
+    o = pd.read_csv(URL_OPLATY)
+    b.columns = b.columns.str.strip()
+    def clean(v):
+        s = re.sub(r'[^\d.]', '', str(v).replace(',', '.'))
+        return float(s) if s else 0.0
+    for c in ['Eksport', 'Import', 'Postoj']:
+        if c in b.columns: b[c] = b[c].apply(clean)
+    o['Wartosc'] = o['Wartosc'].apply(clean)
+    return b, o
 
-df_baza, df_oplaty = fetch_data()
+df_baza, df_oplaty = load_data()
+cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc']))
 
-if df_baza is not None:
-    cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc']))
-    with st.sidebar:
-        st.image("https://www.sqm.pl/wp-content/themes/sqm/img/logo-sqm.png", width=150)
-        st.write(f"Zalogowany: **{st.session_state.user}**")
-        miasto = st.selectbox("CEL", sorted(df_baza['Miasto'].unique()))
-        waga = st.number_input("WAGA SPRZĘTU (kg)", value=500, step=100)
-        data_z = st.date_input("ZAŁADUNEK", datetime.now())
-        data_p = st.date_input("POWRÓT", datetime.now() + timedelta(days=3))
-        dni = max(0, (data_p - data_z).days)
-        if st.button("WYLOGUJ"):
-            cookie_manager.delete("sqm_vantage_session")
-            st.session_state.authenticated = False
-            st.rerun()
+with st.sidebar:
+    st.image("https://www.sqm.pl/wp-content/themes/sqm/img/logo-sqm.png", width=150)
+    st.write(f"Zalogowany: **{st.session_state.user}**")
+    miasto = st.selectbox("KIERUNEK", sorted(df_baza['Miasto'].unique()))
+    waga = st.number_input("WAGA (kg)", value=500)
+    d1 = st.date_input("ZAŁADUNEK", datetime.now())
+    d2 = st.date_input("POWRÓT", datetime.now() + timedelta(days=2))
+    dni = max(0, (d2-d1).days)
+    if st.button("WYLOGUJ"):
+        cookie_manager.delete("sqm_session")
+        st.session_state.auth = False
+        st.rerun()
 
-    w_total = waga * cfg.get('WAGA_BUFOR', 1.2)
-    v_type = "BUS" if w_total <= 1000 else "SOLO" if w_total <= 5500 else "FTL"
-    res = df_baza[(df_baza['Miasto'] == miasto) & (df_baza['Typ_Pojazdu'] == v_type)]
+# OBLICZENIA
+w_calc = waga * cfg.get('WAGA_BUFOR', 1.2)
+v_type = "BUS" if w_calc <= 1000 else "SOLO" if w_calc <= 5500 else "FTL"
+row = df_baza[(df_baza['Miasto'] == miasto) & (df_baza['Typ_Pojazdu'] == v_type)]
 
-    if not res.empty:
-        e, i = res['Eksport'].mean(), res['Import'].mean()
-        p = res['Postoj'].mean() * dni
-        park = dni * cfg.get('PARKING_DAY', 30)
-        
-        ata, ferry = 0, 0
-        if miasto in ["Londyn", "Liverpool", "Manchester", "Bazylea", "Genewa", "Zurych"]:
-            ata = cfg.get('ATA_CARNET', 166)
-            if "Londyn" in miasto or "Liverpool" in miasto or "Manchester" in miasto:
-                ferry = cfg.get('FERRY_BUS', 332) if v_type == "BUS" else cfg.get('FERRY_FTL_SOLO', 522)
-        
-        total = e + i + p + park + ata + ferry
+if not row.empty:
+    e, i = row['Eksport'].mean(), row['Import'].mean()
+    p = row['Postoj'].mean() * dni
+    park = dni * cfg.get('PARKING_DAY', 30)
+    total = e + i + p + park
 
-        items = [("Eksport", e), ("Import", i), (f"Standby ({dni}d)", p), (f"Parking ({dni}d)", park)]
-        if ata > 0: items.append(("Karnet ATA", ata))
+    # GENEROWANIE HTML (BEZ NOWYCH LINII)
+    items = [("Eksport", e), ("Import", i), (f"Standby ({dni}d)", p), (f"Parking ({dni}d)", park)]
+    comp_html = "".join([f'<div style="background:rgba(255,255,255,0.05);padding:15px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);display:flex;justify-content:space-between;align-items:center;"><span style="color:#94a3b8;font-size:13px;">{n}</span><span style="color:white;font-weight:bold;">€ {v:,.2f}</span></div>' for n, v in items])
+
+    main_html = f"""
+    <div style="font-family:sans-serif; background:radial-gradient(circle at 50% 10%, #1e293b 0%, #030508 100%); padding:40px; border-radius:20px; color:white;">
+        <div style="color:#ed8936; font-weight:bold; letter-spacing:2px; font-size:12px; margin-bottom:10px;">ESTIMATED RATE</div>
+        <div style="font-size:70px; font-weight:900; margin-bottom:30px;">€ {total:,.2f} <span style="font-size:20px; color:#64748b; font-weight:400;">netto</span></div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:15px;">{comp_html}</div>
+    </div>
+    """
+    
+    # WYMUSZENIE RENDEROWANIA PRZEZ IFRAME (Rozwiązuje problem wyświetlania tekstu)
+    st.components.v1.html(main_html, height=400)
+else:
+    st.error("Brak danych dla wybranej konfiguracji.")
