@@ -13,7 +13,7 @@ URL_OPLATY = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out
 
 st.set_page_config(page_title="SQM VANTAGE | Logistics Intelligence", layout="wide")
 
-# --- CUSTOM CSS ---
+# --- CUSTOM CSS (Glassmorphism) ---
 st.markdown("""
     <style>
     .stApp { background: radial-gradient(circle at 50% 10%, #1e293b 0%, #030508 100%); color: #e2e8f0; }
@@ -22,10 +22,7 @@ st.markdown("""
     .metric-card {
         background: rgba(255, 255, 255, 0.03);
         border: 1px solid rgba(255, 255, 255, 0.1);
-        padding: 15px 20px;
-        border-radius: 12px;
-        backdrop-filter: blur(10px);
-        margin-bottom: 10px;
+        padding: 15px 20px; border-radius: 12px; backdrop-filter: blur(10px); margin-bottom: 10px;
     }
     .metric-label { font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 1.2px; font-weight: 600; }
     .metric-value { font-size: 1.2rem; font-weight: 700; color: #ffffff; margin-top: 5px; }
@@ -33,12 +30,8 @@ st.markdown("""
     .price-container {
         background: rgba(255, 255, 255, 0.04);
         border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 30px;
-        padding: 45px;
-        margin-top: 20px;
-        backdrop-filter: blur(25px);
-        box-shadow: 0 20px 50px rgba(0,0,0,0.4);
-        position: relative;
+        border-radius: 30px; padding: 45px; margin-top: 20px;
+        backdrop-filter: blur(25px); box-shadow: 0 20px 50px rgba(0,0,0,0.4); position: relative;
     }
     .price-container::after {
         content: ""; position: absolute; top: 45px; left: 0; width: 5px; height: 100px;
@@ -67,7 +60,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- DANE ---
+# --- POBIERANIE DANYCH ---
 @st.cache_data(ttl=300)
 def fetch_data():
     try:
@@ -96,13 +89,14 @@ if df_baza is not None and df_oplaty is not None:
     with st.sidebar:
         st.image("https://www.sqm.pl/wp-content/themes/sqm/img/logo-sqm.png", width=160)
         miasta = sorted(df_baza['Miasto'].dropna().unique())
-        wybrane_miasto = st.selectbox("MIASTO", miasta)
-        waga_input = st.number_input("WAGA (kg)", min_value=0, value=500, step=100)
-        data_zal = st.date_input("ZAŁADUNEK", datetime.now())
-        data_roz = st.date_input("POWRÓT", datetime.now())
+        wybrane_miasto = st.selectbox("DESTINATION / MIASTO", miasta)
+        waga_input = st.number_input("MAIN PROJECT WEIGHT (kg)", min_value=0, value=500, step=100)
+        data_zal = st.date_input("LOADING DATE", datetime.now())
+        data_roz = st.date_input("RETURN DATE", datetime.now())
         dni_postoju = max(0, (data_roz - data_zal).days)
-        is_admin = st.checkbox("DEBUG")
+        is_admin = st.checkbox("SHOW LOGISTICS LOGS")
 
+    # LOGIKA
     waga_total = waga_input * cfg.get('WAGA_BUFOR', 1.2)
     if waga_total <= 1000: v_class = "BUS"
     elif waga_total <= 5500: v_class = "SOLO"
@@ -131,36 +125,38 @@ if df_baza is not None and df_oplaty is not None:
         
         h1, h2, h3, h4 = st.columns(4)
         h1.markdown(f'<div class="metric-card"><div class="metric-label">Operational Weight</div><div class="metric-value">{waga_total:,.0f} kg</div></div>', unsafe_allow_html=True)
-        h2.markdown(f'<div class="metric-card"><div class="metric-label">Unit Type</div><div class="metric-value">{v_class}</div></div>', unsafe_allow_html=True)
+        h2.markdown(f'<div class="metric-card"><div class="metric-label">Selected Unit</div><div class="metric-value">{v_class}</div></div>', unsafe_allow_html=True)
         h3.markdown(f'<div class="metric-card"><div class="metric-label">Total Days</div><div class="metric-value">{dni_postoju}</div></div>', unsafe_allow_html=True)
-        h4.markdown(f'<div class="metric-card"><div class="metric-label">Customs Info</div><div class="metric-value">{"Required" if wybrane_miasto in kraje_odprawy else "None"}</div></div>', unsafe_allow_html=True)
+        h4.markdown(f'<div class="metric-card"><div class="metric-label">Customs Zone</div><div class="metric-value">{"Required" if wybrane_miasto in kraje_odprawy else "None"}</div></div>', unsafe_allow_html=True)
 
-        # PRZYGOTOWANIE KOMPONENTÓW HTML
-        components = [
-            ("Eksport (Średnia rynkowa)", avg_exp),
-            ("Import (Średnia rynkowa)", avg_imp),
-            (f"Standby Przewoźnika ({dni_postoju} d)", total_postoj_base),
-            (f"Parking SQM ({dni_postoju} d)", parking_sqm)
-        ]
-        if ata_val > 0: components.append(("Odprawa / Karnet ATA", ata_val))
-        if ferry_val > 0: components.append(("Przeprawa / Prom", ferry_val))
+        # BUDOWA KOMPONENTÓW DO JEDNEGO CIĄGU HTML
+        comp_html = f'<div class="component-item"><span class="comp-name">Eksport (Średnia)</span><span class="comp-price">€ {avg_exp:,.2f}</span></div>'
+        comp_html += f'<div class="component-item"><span class="comp-name">Import (Średnia)</span><span class="comp-price">€ {avg_imp:,.2f}</span></div>'
+        comp_html += f'<div class="component-item"><span class="comp-name">Standby Przewoźnika ({dni_postoju} d)</span><span class="comp-price">€ {total_postoj_base:,.2f}</span></div>'
+        comp_html += f'<div class="component-item"><span class="comp-name">Parking SQM ({dni_postoju} d)</span><span class="comp-price">€ {parking_sqm:,.2f}</span></div>'
+        
+        if ata_val > 0:
+            comp_html += f'<div class="component-item"><span class="comp-name">Karnet ATA / Odprawa</span><span class="comp-price">€ {ata_val:,.2f}</span></div>'
+        if ferry_val > 0:
+            comp_html += f'<div class="component-item"><span class="comp-name">Przeprawa / Promy</span><span class="comp-price">€ {ferry_val:,.2f}</span></div>'
 
-        comp_html = "".join([f'<div class="component-item"><span class="comp-name">{n}</span><span class="comp-price">€ {p:,.2f}</span></div>' for n, p in components])
-
-        # RENDERING CAŁEJ KARTY W JEDNYM BLOKU HTML
-        st.markdown(f"""
-            <div class="price-container">
-                <div class="price-label">Estimated Logistics Cost</div>
-                <div class="price-value">€ {cena_final:,.2f} <span class="price-currency">netto</span></div>
-                
-                <div class="components-title">Price Breakdown (All components included)</div>
-                <div class="components-grid">
-                    {comp_html}
-                </div>
+        # WYŚWIETLENIE CAŁOŚCI JAKO JEDEN BLOK HTML
+        full_result_html = f"""
+        <div class="price-container">
+            <div class="price-label">Recommended Project Logistics Rate</div>
+            <div class="price-value">€ {cena_final:,.2f} <span class="price-currency">netto</span></div>
+            
+            <div class="components-title">Price Breakdown (All components included)</div>
+            <div class="components-grid">
+                {comp_html}
             </div>
-        """, unsafe_allow_html=True)
+        </div>
+        """
+        st.markdown(full_result_html, unsafe_allow_html=True)
 
         if is_admin:
             st.dataframe(opcje)
     else:
-        st.error(f"No pricing data for {wybrane_miasto}")
+        st.error(f"No pricing data found for {wybrane_miasto} and {v_class}")
+
+st.markdown("<br><p style='text-align:right; opacity: 0.2; font-size: 0.7rem;'>SQM MULTIMEDIA SOLUTIONS | VANTAGE v5.5</p>", unsafe_allow_html=True)
