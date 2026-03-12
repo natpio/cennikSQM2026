@@ -3,198 +3,191 @@ import pandas as pd
 from datetime import datetime
 import re
 
-# --- KONFIGURACJA POŁĄCZENIA ---
+# --- KONFIGURACJA ---
 SHEET_ID = "1sYlXP6WVzPE09qfmydQYQNsjiZcDgRSJGyWoXfjmkDY"
 SHEET_NAME_BAZA = "CENNIK_BAZA"
 SHEET_NAME_OPLATY = "OPLATY_STALE"
 
-# Linki do pobierania CSV z Google Sheets
 URL_BAZA = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={SHEET_NAME_BAZA}"
 URL_OPLATY = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={SHEET_NAME_OPLATY}"
 
-# Ustawienia strony Streamlit
-st.set_page_config(page_title="SQM VANTAGE v5.1", layout="wide")
+st.set_page_config(page_title="SQM VANTAGE | Logistics", layout="wide")
 
-# --- STYLE CSS (Branding SQM Multimedia Solutions) ---
+# --- CUSTOM CSS (Styl Glassmorphism z załącznika) ---
 st.markdown("""
     <style>
-    .main { background-color: #030508; color: #e2e8f0; }
-    .stNumberInput, .stSelectbox, .stDateInput { background-color: #1a202c !important; }
-    .quote-container {
-        background-color: #ffffff;
-        color: #030508;
-        padding: 40px;
-        border-radius: 20px;
-        border-left: 12px solid #ed8936;
-        margin: 20px 0;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    /* Tło całej aplikacji */
+    .stApp {
+        background: radial-gradient(circle at 70% 20%, #1e293b 0%, #030508 100%);
+        color: #e2e8f0;
     }
+
+    /* Sidebar - Szklany efekt */
+    [data-testid="stSidebar"] {
+        background-color: rgba(15, 23, 42, 0.8);
+        backdrop-filter: blur(10px);
+        border-right: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* Karty parametrów (Metric Cards) */
     .metric-card {
-        background: rgba(255,255,255,0.05);
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         padding: 20px;
-        border-radius: 12px;
-        border: 1px solid rgba(255,255,255,0.1);
-        text-align: center;
+        border-radius: 15px;
+        backdrop-filter: blur(5px);
+        text-align: left;
     }
-    .admin-section {
-        background-color: #1a202c;
-        padding: 20px;
-        border-radius: 10px;
-        border: 1px dashed #4a5568;
-        margin-top: 30px;
+    .metric-label { font-size: 0.8rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+    .metric-value { font-size: 1.5rem; font-weight: 700; color: #f8fafc; }
+
+    /* Główna karta z ceną (Kopiujemy styl z obrazka) */
+    .price-container {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 24px;
+        padding: 40px;
+        margin: 20px 0;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(20px);
+        position: relative;
+        overflow: hidden;
     }
+    
+    .price-container::before {
+        content: "";
+        position: absolute;
+        top: 0; left: 0; width: 6px; height: 100%;
+        background: #ed8936; /* Pomarańcz SQM */
+    }
+
+    .price-label { font-size: 1rem; color: #ed8936; font-weight: 600; text-transform: uppercase; margin-bottom: 10px; }
+    .price-value { font-size: 5rem; font-weight: 900; color: #ffffff; line-height: 1; }
+    .price-currency { font-size: 1.5rem; font-weight: 400; color: #94a3b8; }
+    
+    /* Detale pod ceną */
+    .detail-row { display: flex; gap: 20px; margin-top: 25px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px; }
+    .detail-item { font-size: 0.9rem; color: #cbd5e1; }
+    .detail-item b { color: #ffffff; }
+
+    /* Przycisk Admina */
+    .stCheckbox label { color: #94a3b8 !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- FUNKCJE POBIERANIA I CZYSZCZENIA DANYCH ---
+# --- FUNKCJE DANYCH ---
 @st.cache_data(ttl=300)
 def fetch_data():
     try:
-        # Pobieranie bazy cenowej
         df_baza = pd.read_csv(URL_BAZA)
+        df_oplaty = pd.read_csv(URL_OPLATY)
         df_baza.columns = df_baza.columns.str.strip()
-        
-        # Funkcja czyszcząca liczby (usuwa przecinki, spacje, waluty)
-        def clean_numeric(value):
-            if pd.isna(value): return 0.0
-            s = str(value).replace(',', '.').strip()
-            s = re.sub(r'[^\d.]', '', s)
-            try:
-                return float(s)
-            except:
-                return 0.0
+        df_oplaty.columns = df_oplaty.columns.str.strip()
 
-        # Czyszczenie kluczowych kolumn finansowych
+        def clean_numeric(val):
+            if pd.isna(val): return 0.0
+            s = str(val).replace(',', '.').strip()
+            s = re.sub(r'[^\d.]', '', s)
+            return float(s) if s else 0.0
+
         for col in ['Eksport', 'Import', 'Postoj']:
             if col in df_baza.columns:
                 df_baza[col] = df_baza[col].apply(clean_numeric)
-
-        # Pobieranie opłat stałych
-        df_oplaty = pd.read_csv(URL_OPLATY)
-        df_oplaty.columns = df_oplaty.columns.str.strip()
-        df_oplaty['Wartosc'] = df_oplaty['Wartosc'].apply(clean_numeric)
         
+        df_oplaty['Wartosc'] = df_oplaty['Wartosc'].apply(clean_numeric)
         return df_baza, df_oplaty
     except Exception as e:
-        st.error(f"Błąd połączenia z bazą danych: {e}")
+        st.error(f"Data Error: {e}")
         return None, None
 
 df_baza, df_oplaty = fetch_data()
 
 if df_baza is not None and df_oplaty is not None:
-    # Mapowanie konfiguracji na słownik
     cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc']))
     
-    # --- PANEL BOCZNY (INPUTY) ---
-    st.sidebar.image("https://www.sqm.pl/wp-content/themes/sqm/img/logo-sqm.png", width=180)
-    st.sidebar.title("Kalkulator Transportu")
-    
-    miasta = sorted(df_baza['Miasto'].dropna().unique())
-    wybrane_miasto = st.sidebar.selectbox("Miasto docelowe", miasta)
-    
-    waga_input = st.sidebar.number_input("Waga sprzętu netto (kg)", min_value=1, value=500, step=100)
-    
-    st.sidebar.markdown("---")
-    data_zal = st.sidebar.date_input("Data załadunku", datetime.now())
-    data_roz = st.sidebar.date_input("Data powrotu (rozładunek PL)", datetime.now())
-    
-    dni_postoju = (data_roz - data_zal).days
-    if dni_postoju < 0: dni_postoju = 0
-    
-    is_admin = st.sidebar.checkbox("Pokaż szczegóły logistyka")
-
-    # --- LOGIKA OBLICZEŃ ---
-    
-    # 1. Obliczanie wagi z akcesoriami (+20% zgodnie z WAGA_BUFOR)
-    mnoznik_wagi = cfg.get('WAGA_BUFOR', 1.2)
-    waga_total = waga_input * mnoznik_wagi
-    
-    # 2. Automatyczny dobór najmniejszego pojazdu
-    if waga_total <= 1000:
-        v_class = "BUS"
-    elif waga_total <= 5500:
-        v_class = "SOLO"
-    else:
-        v_class = "FTL"
+    # --- SIDEBAR ---
+    with st.sidebar:
+        st.image("https://www.sqm.pl/wp-content/themes/sqm/img/logo-sqm.png", width=160)
+        st.markdown("<br>", unsafe_allow_html=True)
         
-    # 3. Filtrowanie bazy dla wybranej trasy i pojazdu
+        miasta = sorted(df_baza['Miasto'].dropna().unique())
+        wybrane_miasto = st.selectbox("DESTINATION", miasta)
+        
+        waga_input = st.number_input("MAIN PROJECT WEIGHT (kg)", min_value=0, value=500, step=100)
+        
+        st.markdown("---")
+        data_zal = st.date_input("LOADING DATE", datetime.now())
+        data_roz = st.date_input("RETURN DATE", datetime.now())
+        
+        dni_postoju = (data_roz - data_zal).days
+        dni_postoju = max(0, dni_postoju)
+        
+        st.markdown("<br>"*5, unsafe_allow_html=True)
+        is_admin = st.checkbox("LOGISTICS DETAILS")
+
+    # --- OBLICZENIA ---
+    waga_total = waga_input * cfg.get('WAGA_BUFOR', 1.2)
+    
+    if waga_total <= 1000: v_class = "BUS"
+    elif waga_total <= 5500: v_class = "SOLO"
+    else: v_class = "FTL"
+        
     opcje = df_baza[(df_baza['Miasto'] == wybrane_miasto) & (df_baza['Typ_Pojazdu'] == v_class)].copy()
     
     if not opcje.empty:
-        # Kalkulacja kosztu całkowitego dla każdego przewoźnika
         opcje['Suma_Calkowita'] = opcje['Eksport'] + opcje['Import'] + (dni_postoju * opcje['Postoj'])
-        
-        # OBLICZANIE ŚREDNIEJ RYNKOWEJ (Market Average)
         srednia_rynkowa = opcje['Suma_Calkowita'].mean()
         
-        # 4. Koszty dodatkowe
         koszt_parkingu = dni_postoju * cfg.get('PARKING_DAY', 30)
         dodatki_extra = 0
-        detale_extra = []
         
-        # Obsługa stref specjalnych (UK / CH)
         kraje_odprawy = ["Londyn", "Liverpool", "Manchester", "Bazylea", "Genewa", "Zurych"]
         if wybrane_miasto in kraje_odprawy:
-            ata = cfg.get('ATA_CARNET', 166)
-            dodatki_extra += ata
-            detale_extra.append(f"Odprawa / Karnet ATA: €{ata}")
-            
+            dodatki_extra += cfg.get('ATA_CARNET', 166)
             if wybrane_miasto in ["Londyn", "Liverpool", "Manchester"]:
-                prom = cfg.get('FERRY_BUS', 332) if v_class == "BUS" else cfg.get('FERRY_FTL_SOLO', 522)
-                dodatki_extra += prom
-                detale_extra.append(f"Przeprawa promowa: €{prom}")
+                dodatki_extra += cfg.get('FERRY_BUS', 332) if v_class == "BUS" else cfg.get('FERRY_FTL_SOLO', 522)
 
-        # WYNIK FINALNY
         cena_final = srednia_rynkowa + koszt_parkingu + dodatki_extra
 
-        # --- PREZENTACJA DLA HANDLOWCA ---
-        st.title(f"Logistyka: PL ↔ {wybrane_miasto}")
+        # --- WIDOK GŁÓWNY ---
+        st.markdown(f"### LOGISTICS VANTAGE / {wybrane_miasto.upper()}")
         
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.markdown(f'<div class="metric-card">Waga z akcesoriami (+20%)<br><b style="font-size:24px;">{waga_total:.1f} kg</b></div>', unsafe_allow_html=True)
-        with col2:
-            st.markdown(f'<div class="metric-card">Typ dobranej jednostki<br><b style="font-size:24px;">{v_class}</b></div>', unsafe_allow_html=True)
-        with col3:
-            st.markdown(f'<div class="metric-card">Dni operacyjne (postój)<br><b style="font-size:24px;">{dni_postoju} dni</b></div>', unsafe_allow_html=True)
+        # Grid z parametrami
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            st.markdown(f'<div class="metric-card"><div class="metric-label">Operational Weight</div><div class="metric-value">{waga_total:,.1f} kg</div></div>', unsafe_allow_html=True)
+        with c2:
+            st.markdown(f'<div class="metric-card"><div class="metric-label">Vehicle Type</div><div class="metric-value">{v_class}</div></div>', unsafe_allow_html=True)
+        with c3:
+            st.markdown(f'<div class="metric-card"><div class="metric-label">Event Days</div><div class="metric-value">{dni_postoju}</div></div>', unsafe_allow_html=True)
+        with c4:
+            st.markdown(f'<div class="metric-card"><div class="metric-label">Customs Zone</div><div class="metric-value">{"YES" if wybrane_miasto in kraje_odprawy else "NO"}</div></div>', unsafe_allow_html=True)
 
+        # Główna karta ceny (Styl z obrazka)
         st.markdown(f"""
-            <div class="quote-container">
-                <p style="margin:0; font-weight:700; color:#4a5568; text-transform:uppercase; letter-spacing:1px;">Kwota transportu do ujęcia w ofercie:</p>
-                <h1 style="margin:0; font-size: 5.5rem; color:#030508;">€ {cena_final:,.2f} <span style="font-size:1.5rem;">netto</span></h1>
-                <p style="margin-top:15px; color:#718096; border-top: 1px solid #eee; padding-top: 10px; font-style: italic;">
-                    Stawka ryczałtowa. Zawiera koszty paliwa, opłaty drogowe, przeprawy oraz obsługę logistyczną postoju.
-                </p>
+            <div class="price-container">
+                <div class="price-label">Recommended Logistics Rate</div>
+                <div class="price-value">€ {cena_final:,.2f} <span class="price-currency">net</span></div>
+                <div class="detail-row">
+                    <div class="detail-item">Route: <b>PL &harr; {wybrane_miasto}</b></div>
+                    <div class="detail-item">Insurance: <b>Covered</b></div>
+                    <div class="detail-item">Fuel & Tolls: <b>Included</b></div>
+                </div>
             </div>
         """, unsafe_allow_html=True)
 
-        # --- WIDOK LOGISTYKA (ADMIN) ---
         if is_admin:
-            with st.expander("🛠 SZCZEGÓŁY ANALITYCZNE (WIDOK LOGISTYKA)", expanded=True):
-                st.markdown('<div class="admin-section">', unsafe_allow_html=True)
-                ca, cb = st.columns(2)
-                with ca:
-                    st.write("**Składowe ceny rynkowej:**")
-                    st.write(f"- Średnia z bazy przewoźników: €{srednia_rynkowa:,.2f}")
-                    st.write(f"- Parking (SQM Standard): €{koszt_parkingu:,.2f}")
-                    for d in detale_extra:
-                        st.write(f"- {d}")
-                with cb:
-                    st.write("**Dostępni przewoźnicy dla tej trasy:**")
-                    # Pokazujemy realne koszty z bazy dla porównania
+            with st.expander("ANALYTICAL BREAKDOWN"):
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    st.write("**Cost Factors:**")
+                    st.write(f"• Market Average: €{srednia_rynkowa:,.2f}")
+                    st.write(f"• Parking Allowance: €{koszt_parkingu:,.2f}")
+                    st.write(f"• Surcharges (Ferry/ATA): €{dodatki_extra:,.2f}")
+                with col_b:
+                    st.write("**Database Comparison:**")
                     st.dataframe(opcje[['Przewoznik', 'Suma_Calkowita']].sort_values('Suma_Calkowita'))
-                
-                # Szybka ocena potencjalnego zysku na flocie własnej
-                sqm_only = opcje[opcje['Przewoznik'].str.contains("SQM", case=False, na=False)]
-                if not sqm_only.empty:
-                    koszt_wlasny = sqm_only['Suma_Calkowita'].min() + koszt_parkingu + dodatki_extra
-                    st.success(f"💡 Jeśli pojedzie flota własna SQM, koszt wyniesie ok. €{koszt_wlasny:,.2f} (Zysk operacyjny: €{cena_final - koszt_wlasny:,.2f})")
-                st.markdown('</div>', unsafe_allow_html=True)
-
     else:
-        st.error(f"Brak danych w arkuszu dla miasta {wybrane_miasto} i pojazdu {v_class}. Uzupełnij zakładkę CENNIK_BAZA.")
+        st.error(f"No pricing data found for {wybrane_miasto} / {v_class}")
 
-else:
-    st.warning("Nie udało się załadować danych. Sprawdź ustawienia udostępniania arkusza Google.")
-
-st.markdown("<br><p style='text-align:center; opacity:0.3;'>SQM Multimedia Solutions | Vantage Intelligence v5.1</p>", unsafe_allow_html=True)
+st.markdown("<div style='text-align:right; font-size: 0.7rem; opacity: 0.5;'>SQM VANTAGE v5.2 | INTELLIGENCE INTERFACE</div>", unsafe_allow_html=True)
