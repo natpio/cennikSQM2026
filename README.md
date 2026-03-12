@@ -1,0 +1,1 @@
+# cennikSQM2026
