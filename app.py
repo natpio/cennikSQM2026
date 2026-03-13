@@ -22,51 +22,51 @@ CITY_COORDS = {
     "Monachium": [48.1351, 11.5820], "Mediolan": [45.4642, 9.1900]
 }
 
-st.set_page_config(page_title="SQM LOGISTICS v14.8", layout="wide")
+st.set_page_config(page_title="SQM LOGISTICS v14.9", layout="wide")
 
-# --- CSS (Ultra High Contrast) ---
+# --- CSS (Max Focus on Price & Clarity) ---
 st.markdown("""
     <style>
     .stApp { background-color: #05070a !important; }
     
-    /* Nagłówek Trasy */
     .route-header { 
-        font-size: 34px !important; font-weight: 900; color: #ffffff; 
-        padding: 10px 0; border-bottom: 4px solid #ed8936; margin-bottom: 30px;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        font-size: 38px !important; font-weight: 900; color: #ffffff; 
+        padding: 5px 0; border-bottom: 4px solid #ed8936; margin-bottom: 30px;
     }
     
-    /* Główna Sekcja */
     .hero-card {
-        background: linear-gradient(145deg, #111827, #1f2937);
-        border: 1px solid #374151; border-radius: 20px;
-        padding: 35px; margin-bottom: 25px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.7);
+        background: linear-gradient(145deg, #0f172a, #1e293b);
+        border: 1px solid #334155; border-radius: 24px;
+        padding: 40px; margin-bottom: 30px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
     }
-    .main-price-label { color: #ed8936; font-size: 18px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
-    .main-price-value { color: #ffffff; font-size: 82px; font-weight: 900; line-height: 1; margin: 15px 0; }
     
-    /* Nowe Karty Danych */
-    .data-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 25px; }
-    .data-item { background: rgba(255,255,255,0.03); padding: 15px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); }
-    .data-label { color: #9ca3af; font-size: 11px; text-transform: uppercase; font-weight: 600; }
-    .data-value { color: #ffffff; font-size: 20px; font-weight: 800; }
+    .main-price-label { color: #ed8936; font-size: 20px; font-weight: 800; text-transform: uppercase; }
+    /* MEGA CENA - Zwiększona zgodnie z prośbą */
+    .main-price-value { color: #ffffff; font-size: 96px; font-weight: 950; line-height: 0.9; margin: 20px 0; }
     
-    /* Porównanie Alternatyw - Karty */
+    .data-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-top: 30px; }
+    .data-item { background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px; border: 1px solid rgba(255,255,255,0.1); }
+    .data-label { color: #94a3b8; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+    .data-value { color: #ffffff; font-size: 24px; font-weight: 800; }
+    
+    /* Porównanie - Czytelne pionowe karty */
+    .alt-container { margin-top: 20px; }
     .alt-card { 
-        background: #111827; border-left: 5px solid #4b5563; 
-        padding: 15px; margin-bottom: 10px; border-radius: 8px;
+        background: #111827; border: 1px solid #1f2937; border-left: 6px solid #475569;
+        padding: 20px; margin-bottom: 12px; border-radius: 12px;
         display: flex; justify-content: space-between; align-items: center;
+        transition: transform 0.2s;
     }
-    .alt-best { border-left: 5px solid #ed8936; background: rgba(237, 137, 54, 0.05); }
+    .alt-card:hover { transform: translateX(5px); background: #1e293b; }
+    .alt-best { border-left-color: #ed8936; background: rgba(237, 137, 54, 0.1); }
     
-    /* Składowe - Czytelna Lista */
-    .cost-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #374151; }
-    .cost-n { color: #d1d5db; font-size: 15px; }
-    .cost-v { color: #ffffff; font-weight: 700; font-size: 16px; }
+    .cost-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #1e293b; }
+    .cost-n { color: #94a3b8; font-size: 16px; }
+    .cost-v { color: #ffffff; font-weight: 700; font-size: 18px; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- AUTH & DATA (Bez zmian w logice) ---
+# --- AUTH ---
 def make_hash(p): return hashlib.sha256(p.strip().encode()).hexdigest()
 cookie_manager = stx.CookieManager()
 if "auth" not in st.session_state: st.session_state.auth = False
@@ -94,9 +94,16 @@ if not st.session_state.auth:
                 st.rerun()
     st.stop()
 
+# --- DATA FETCH (FILTR TRANSPORTU WŁASNEGO) ---
 @st.cache_data(ttl=60)
 def fetch_logs():
     b = pd.read_csv(URL_BAZA); o = pd.read_csv(URL_OPLATY); b.columns = b.columns.str.strip()
+    
+    # FILTR: Usuwamy stawki własne, jeśli kolumna 'Dostawca' zawiera 'SQM' lub 'Własny'
+    # Jeśli Twoja baza ma inną kolumnę, zmień 'Dostawca' poniżej.
+    if 'Dostawca' in b.columns:
+        b = b[~b['Dostawca'].str.contains('SQM|Własny|Wlasny', case=False, na=False)]
+    
     def clean(v):
         s = re.sub(r'[^\d.]', '', str(v).replace(',', '.')); return float(s) if s else 0.0
     for c in ['Eksport', 'Import', 'Postoj']: b[c] = b[c].apply(clean)
@@ -109,12 +116,12 @@ cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc']))
 # --- SIDEBAR ---
 with st.sidebar:
     st.image("https://www.sqm.pl/wp-content/themes/sqm/img/logo-sqm.png", width=120)
-    st.info(f"User: {st.session_state.user}")
+    st.info(f"Logistyka: {st.session_state.user}")
     mode = st.radio("STRATEGIA", ["DEDYKOWANY", "DOŁADUNEK"])
     target = st.selectbox("MIASTO DOCELOWE", sorted(df_baza['Miasto'].unique()))
     weight = st.number_input("WAGA SPRZĘTU (kg)", value=1000, step=500)
-    d_start = st.date_input("PIERWSZY DZIEŃ MONTAŻU", datetime.now())
-    d_end = st.date_input("OSTATNI DZIEŃ MONTAŻU", datetime.now() + timedelta(days=2))
+    d_start = st.date_input("ZAŁADUNEK", datetime.now())
+    d_end = st.date_input("POWRÓT", datetime.now() + timedelta(days=2))
     days = max(0, (d_end - d_start).days)
     if st.button("WYLOGUJ"):
         cookie_manager.delete("sqm_v14_session"); st.session_state.auth = False; st.rerun()
@@ -125,18 +132,20 @@ caps = {"BUS": 1200, "SOLO": 5500, "FTL": 10500}
 results = []
 
 for v_type, cap in caps.items():
+    # Liczymy średnią TYLKO z zewnętrznych stawek (odfiltrowanych wyżej)
     res = df_baza[(df_baza['Miasto'] == target) & (df_baza['Typ_Pojazdu'] == v_type)]
     if not res.empty:
-        r = res.iloc[0]
+        r = res.mean(numeric_only=True) # Średnia rynkowa
         v_count = math.ceil(w_eff / cap)
         load_pc = min(100, (w_eff / (v_count * cap)) * 100)
+        
         exp = (r['Eksport'] * v_count if mode == "DEDYKOWANY" else r['Eksport'] * (w_eff/cap))
         imp = (r['Import'] * v_count if mode == "DEDYKOWANY" else r['Import'] * (w_eff/cap))
         ata = (cfg.get('ATA_CARNET', 166) if target in ["Londyn", "Genewa", "Zurych"] else 0)
         ferry = (cfg.get('Ferry_UK', 450) if target == "Londyn" else 0)
         parking = (days * cfg.get('PARKING_DAY', 30) * v_count)
         stay_cost = r['Postoj'] * days * v_count
-        transit = (2 if target in ["Barcelona", "Londyn"] else 1) # Prosta logika tranzytu
+        transit = (2 if target in ["Barcelona", "Londyn", "Madryt", "Lisbona"] else 1)
         
         total = exp + imp + stay_cost + parking + ata + ferry
         results.append({"Pojazd": v_type, "Szt": v_count, "Load": f"{load_pc:.0f}%", "Total": total, "exp": exp, "imp": imp, "stay": stay_cost, "park": parking, "ata": ata, "ferry": ferry, "transit": transit})
@@ -145,10 +154,10 @@ if results:
     best = min(results, key=lambda x: x['Total'])
     st.markdown(f'<div class="route-header">LOGISTYKA: KOMORNIKI ➔ {target.upper()}</div>', unsafe_allow_html=True)
     
-    c_left, c_right = st.columns([1.8, 1])
+    cl, cr = st.columns([1.8, 1])
     
-    with c_left:
-        # GŁÓWNA KARTA CENOWA (v14.8 - Mega czcionka)
+    with cl:
+        # GŁÓWNA KARTA
         st.markdown(f"""
             <div class="hero-card">
                 <div class="main-price-label">Rekomendowana Stawka Projektu (Netto)</div>
@@ -156,42 +165,41 @@ if results:
                 <div class="data-grid">
                     <div class="data-item"><div class="data-label">Pojazd</div><div class="data-value">{best['Pojazd']} ({best['Szt']} szt.)</div></div>
                     <div class="data-item"><div class="data-label">Waga (+20%)</div><div class="data-value">{w_eff:,.0f} kg</div></div>
-                    <div class="data-item"><div class="data-label">Tranzyt</div><div class="data-value">{best['transit']} dni</div></div>
-                    <div class="data-item"><div class="data-label">Postój</div><div class="data-value">{days} dni</div></div>
+                    <div class="data-item"><div class="data-label">Dni Tranzytu</div><div class="data-value">{best['transit']}</div></div>
+                    <div class="data-item"><div class="data-label">Dni Postoju</div><div class="data-value">{days}</div></div>
                 </div>
             </div>
         """, unsafe_allow_html=True)
         
-        # SKŁADOWE (Lista o wysokim kontraście)
-        st.markdown("### 📋 SZCZEGÓŁOWE SKŁADOWE:")
-        sc1, sc2 = st.columns(2)
-        with sc1:
-            st.markdown(f'<div class="cost-row"><span class="cost-n">Eksport:</span><span class="cost-v">€ {best["exp"]:,.2f}</span></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="cost-row"><span class="cost-n">Import:</span><span class="cost-v">€ {best["imp"]:,.2f}</span></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="cost-row"><span class="cost-n">Postój (montaż):</span><span class="cost-v">€ {best["stay"]:,.2f}</span></div>', unsafe_allow_html=True)
-        with sc2:
+        # SKŁADOWE
+        st.write("### 📊 ANALIZA KOSZTÓW (RYNEK ZEWNĘTRZNY):")
+        s1, s2 = st.columns(2)
+        with s1:
+            st.markdown(f'<div class="cost-row"><span class="cost-n">Eksport (Średnia):</span><span class="cost-v">€ {best["exp"]:,.2f}</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="cost-row"><span class="cost-n">Import (Średnia):</span><span class="cost-v">€ {best["imp"]:,.2f}</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="cost-row"><span class="cost-n">Postój Przewoźnika:</span><span class="cost-v">€ {best["stay"]:,.2f}</span></div>', unsafe_allow_html=True)
+        with s2:
             st.markdown(f'<div class="cost-row"><span class="cost-n">Parkingi SQM:</span><span class="cost-v">€ {best["park"]:,.2f}</span></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="cost-row"><span class="cost-n">Odprawa/ATA:</span><span class="cost-v">€ {best["ata"]:,.2f}</span></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="cost-row"><span class="cost-n">Promy/Mosty:</span><span class="cost-v">€ {best["ferry"]:,.2f}</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="cost-row"><span class="cost-n">Odprawa Celna:</span><span class="cost-v">€ {best["ata"]:,.2f}</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="cost-row"><span class="cost-n">Inne (Promy/Mosty):</span><span class="cost-v">€ {best["ferry"]:,.2f}</span></div>', unsafe_allow_html=True)
 
-        # PORÓWNANIE (Karty zamiast tabeli)
-        st.markdown("<br>### 🚛 ALTERNATYWNE POJAZDY:", unsafe_allow_html=True)
+        # ALTERNATYWY
+        st.markdown("<br>### 🚛 PORÓWNANIE ROZWIĄZAŃ:", unsafe_allow_html=True)
         for r in sorted(results, key=lambda x: x['Total']):
             is_best = "alt-best" if r['Pojazd'] == best['Pojazd'] else ""
             st.markdown(f"""
                 <div class="alt-card {is_best}">
-                    <div style="font-weight: 800; font-size: 18px; color: white;">{r['Pojazd']} <span style="font-size: 12px; color: #9ca3af;">({r['Szt']} szt., {r['Load']} załadunku)</span></div>
-                    <div style="font-size: 20px; font-weight: 900; color: #ed8936;">€ {r['Total']:,.2f}</div>
+                    <div style="font-weight: 800; font-size: 19px; color: white;">{r['Pojazd']} <span style="font-size: 13px; color: #94a3b8;">({r['Szt']} szt. | {r['Load']} ładunku)</span></div>
+                    <div style="font-size: 22px; font-weight: 950; color: #ed8936;">€ {r['Total']:,.2f}</div>
                 </div>
             """, unsafe_allow_html=True)
 
-    with c_right:
-        # PODRASOWANA MAPA (Dark Style)
-        base_coords = CITY_COORDS["Komorniki (Baza)"]
-        dest_coords = CITY_COORDS.get(target, [41.3, 2.1])
-        
-        view_state = pdk.ViewState(latitude=(base_coords[0]+dest_coords[0])/2, longitude=(base_coords[1]+dest_coords[1])/2, zoom=4, pitch=45)
-        layer = pdk.Layer("ArcLayer", data=[{'s': base_coords[::-1], 't': dest_coords[::-1]}], get_source_position="s", get_target_position="t", get_source_color=[237, 137, 54, 200], get_target_color=[255, 255, 255, 200], stroke_width=4)
-        
-        st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state, map_style="mapbox://styles/mapbox/dark-v10"))
-        st.success(f"Trasa potwierdzona. Całkowity czas operacji: {best['transit'] + days} dni.")
+    with cr:
+        # PODRASOWANA MAPA
+        b_c = CITY_COORDS["Komorniki (Baza)"]
+        d_c = CITY_COORDS.get(target, [48.8, 2.3])
+        view = pdk.ViewState(latitude=(b_c[0]+d_c[0])/2, longitude=(b_c[1]+d_c[1])/2, zoom=4, pitch=40)
+        arc = pdk.Layer("ArcLayer", data=[{'s': b_c[::-1], 't': d_c[::-1]}], get_source_position="s", get_target_position="t", 
+                        get_source_color=[237, 137, 54, 255], get_target_color=[255, 255, 255, 150], stroke_width=5)
+        st.pydeck_chart(pdk.Deck(layers=[arc], initial_view_state=view, map_style="mapbox://styles/mapbox/dark-v10"))
+        st.info(f"Całkowity czas operacji (Transit + Postój): {best['transit'] + days} dni.")
