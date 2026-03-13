@@ -40,83 +40,55 @@ CITY_COORDS = {
     "Paryż": [48.8566, 2.3522], "Wiedeń": [48.2082, 16.3738]
 }
 
-st.set_page_config(page_title="SQM LOGISTICS v16.2", layout="wide")
+st.set_page_config(page_title="SQM LOGISTICS v16.3", layout="wide")
 
-# --- RADYKALNY CSS DLA POPRAWY WIDOCZNOŚCI ---
+# --- KRYTYCZNY CSS DLA CZYTELNOŚCI (Naprawa błędu z białymi polami) ---
 st.markdown("""
     <style>
-    /* Globalny Reset i Tło */
-    .stApp { background-color: #05070a !important; }
-    
-    /* SIDEBAR - KONSTRUKCJA */
+    /* 1. TŁO SIDEBARU I RESET SYSTEMOWY */
     [data-testid="stSidebar"] {
         background-color: #0f172a !important;
         border-right: 1px solid #1e293b;
     }
-
-    /* UKRYCIE ŚMIECI SYSTEMOWYCH NA GÓRZE */
-    [data-testid="stSidebarNav"], 
-    header[data-testid="stHeader"],
-    div[data-testid="stSidebarUserContent"] > div:first-child {
+    
+    [data-testid="stSidebarNav"], header, [data-testid="stHeader"] {
         display: none !important;
     }
 
-    /* NAPRAWA PÓL WEJŚCIOWYCH - CIEMNE TŁO + BIAŁY TEKST */
-    /* Dotyczy: Selectbox, NumberInput, DateInput */
-    [data-testid="stSidebar"] div[data-baseweb="input"],
-    [data-testid="stSidebar"] div[data-baseweb="select"],
-    [data-testid="stSidebar"] .stSelectbox div,
-    [data-testid="stSidebar"] input {
-        background-color: #1e293b !important;
-        color: #ffffff !important;
-        border: 1px solid #334155 !important;
-        -webkit-text-fill-color: #ffffff !important;
-    }
-
-    /* Wymuszenie koloru tekstu dla list rozwijanych i etykiet */
-    [data-testid="stSidebar"] label,
-    [data-testid="stSidebar"] .stMarkdown p,
+    /* 2. ETYKIETY I NAPISY W SIDEBARZE - BIAŁE I WYRAŹNE */
+    [data-testid="stSidebar"] label, 
+    [data-testid="stSidebar"] .stMarkdown p, 
     [data-testid="stSidebar"] span {
         color: #ffffff !important;
-        font-weight: 600 !important;
+        font-weight: 700 !important;
+        font-size: 14px !important;
     }
 
-    /* Stylizacja głównego nagłówka trasy */
-    .route-header { 
-        font-size: 32px !important; 
-        font-weight: 900; 
-        color: #ffffff; 
-        border-bottom: 3px solid #ed8936; 
-        margin-bottom: 25px; 
-        padding-bottom: 10px;
+    /* 3. FIX DLA WIDOCZNOŚCI TEKSTU W POLACH (Force Black on White) */
+    /* Jeśli Streamlit wymusza białe tło pola, my wymuszamy CZARNY tekst */
+    [data-testid="stSidebar"] input, 
+    [data-testid="stSidebar"] select,
+    [data-testid="stSidebar"] div[data-baseweb="input"] input,
+    [data-testid="stSidebar"] div[data-baseweb="select"] div {
+        color: #000000 !important;
+        -webkit-text-fill-color: #000000 !important;
+        font-weight: 800 !important;
+        background-color: #ffffff !important;
     }
+
+    /* 4. STYLIZACJA WYNIKÓW (GŁÓWNY PANEL) */
+    .stApp { background-color: #05070a !important; }
+    .route-header { font-size: 30px !important; font-weight: 900; color: #ffffff; border-bottom: 3px solid #ed8936; margin-bottom: 20px; }
+    .hero-card { background: linear-gradient(145deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 15px; padding: 25px; margin-bottom: 20px; }
+    .main-price { color: #ffffff; font-size: 70px; font-weight: 900; }
     
-    /* Karty wyników */
-    .hero-card { 
-        background: linear-gradient(145deg, #1e293b, #0f172a); 
-        border: 1px solid #334155; 
-        border-radius: 20px; 
-        padding: 35px; 
-        margin-bottom: 30px; 
-    }
-    .main-price-value { color: #ffffff; font-size: 85px; font-weight: 950; line-height: 1; }
-    
-    /* Siatka z danymi */
-    .data-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 25px; }
-    .data-item { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); }
-    .data-label { color: #94a3b8; font-size: 10px; font-weight: 700; text-transform: uppercase; }
-    .data-value { color: #ffffff; font-size: 22px; font-weight: 900; }
-    
-    /* Przycisk wyloguj */
-    div.stButton > button {
-        background-color: #1e293b !important;
-        color: #ffffff !important;
-        border: 1px solid #334155 !important;
-    }
+    .data-item { background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); }
+    .data-label { color: #94a3b8; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+    .data-value { color: #ffffff; font-size: 18px; font-weight: 800; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- MECHANIZM LOGOWANIA ---
+# --- LOGOWANIE ---
 def make_hash(p): return hashlib.sha256(p.strip().encode()).hexdigest()
 cookie_manager = stx.CookieManager()
 
@@ -141,8 +113,8 @@ if not st.session_state.auth:
     _, col, _ = st.columns([1, 1.2, 1])
     with col:
         st.markdown("<h2 style='text-align:center; color:white; margin-top:50px;'>SQM LOGISTICS</h2>", unsafe_allow_html=True)
-        u_in = st.text_input("Użytkownik", key="login_user")
-        p_in = st.text_input("Hasło", type="password", key="login_pass")
+        u_in = st.text_input("Użytkownik", key="l_user")
+        p_in = st.text_input("Hasło", type="password", key="l_pass")
         if st.button("ZALOGUJ", use_container_width=True):
             if u_in in user_db and user_db[u_in] == make_hash(p_in):
                 st.session_state.auth, st.session_state.user = True, u_in
@@ -150,7 +122,7 @@ if not st.session_state.auth:
                 st.rerun()
     st.stop()
 
-# --- FETCH DANYCH ---
+# --- DANE ---
 @st.cache_data(ttl=60)
 def fetch_logs():
     b = pd.read_csv(URL_BAZA); o = pd.read_csv(URL_OPLATY); b.columns = b.columns.str.strip()
@@ -165,11 +137,10 @@ def fetch_logs():
 df_baza, df_oplaty = fetch_logs()
 cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc']))
 
-# --- SIDEBAR (NAPRAWIONY) ---
+# --- SIDEBAR (NAPRAWIONA CZYTELNOŚĆ) ---
 with st.sidebar:
-    st.markdown("<div style='padding-top: 20px;'></div>", unsafe_allow_html=True)
-    st.image("https://www.sqm.pl/wp-content/themes/sqm/img/logo-sqm.png", width=180)
-    st.markdown(f"<div style='color: #ed8936 !important; font-size: 16px; font-weight: 800; margin: 15px 0;'>👤 {st.session_state.user.upper()}</div>", unsafe_allow_html=True)
+    st.image("https://www.sqm.pl/wp-content/themes/sqm/img/logo-sqm.png", width=160)
+    st.markdown(f"<div style='color:#ed8936; font-weight:800; margin-bottom:20px;'>ZALOGOWANY: {st.session_state.user.upper()}</div>", unsafe_allow_html=True)
     
     st.markdown("### KONFIGURACJA")
     mode = st.radio("STRATEGIA", ["DEDYKOWANY", "DOŁADUNEK"])
@@ -182,8 +153,7 @@ with st.sidebar:
     d_end = st.date_input("DATA POWROTU", datetime.now() + timedelta(days=10))
     days_stay = max(0, (d_end - d_start).days)
     
-    st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("WYLOGUJ MNIE", use_container_width=True):
+    if st.button("WYLOGUJ", use_container_width=True):
         cookie_manager.delete("sqm_session_v16")
         st.session_state.auth = False
         st.rerun()
@@ -214,39 +184,33 @@ for v_type, cap in caps.items():
             "ferry": ferry, "transit": transit_days, "load": min(100, (w_eff/(v_count*cap))*100)
         })
 
-# --- DASHBOARD ---
+# --- GŁÓWNY WIDOK ---
 if results:
     best = min(results, key=lambda x: x['Total'])
-    st.markdown(f'<div class="route-header">LOGISTYKA: KOMORNIKI ➔ {target.upper()}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="route-header">KOMORNIKI ➔ {target.upper()}</div>', unsafe_allow_html=True)
     
-    cl, cr = st.columns([1.8, 1])
-    with cl:
+    col1, col2 = st.columns([1.8, 1])
+    with col1:
         st.markdown(f"""
             <div class="hero-card">
-                <div style="color: #ed8936; font-size: 14px; font-weight: 800; text-transform: uppercase;">Rekomendowana Stawka Projektu (Netto)</div>
-                <div class="main-price-value">€ {best['Total']:,.2f}</div>
-                <div class="data-grid">
-                    <div class="data-item"><div class="data-label">Pojazd</div><div class="data-value">{best['Pojazd']} ({best['Szt']} szt.)</div></div>
+                <div style="color:#ed8936; font-size:12px; font-weight:800; text-transform:uppercase;">Sugerowana Stawka Projektu (Netto)</div>
+                <div class="main-price">€ {best['Total']:,.2f}</div>
+                <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; margin-top:20px;">
+                    <div class="data-item"><div class="data-label">Pojazd</div><div class="data-value">{best['Pojazd']}</div></div>
                     <div class="data-item"><div class="data-label">Tranzyt</div><div class="data-value">{best['transit']} dni</div></div>
-                    <div class="data-item"><div class="data-label">Waga z buforem</div><div class="data-value">{w_eff:,.0f} kg</div></div>
+                    <div class="data-item"><div class="data-label">Postój</div><div class="data-value">{days_stay} dni</div></div>
                     <div class="data-item"><div class="data-label">Zapełnienie</div><div class="data-value">{best['load']:.0f}%</div></div>
                 </div>
             </div>
         """, unsafe_allow_html=True)
         
-        # Szczegółowe koszty
-        st.write("### 📊 ZESTAWIENIE KOSZTÓW")
-        cols = st.columns(2)
-        with cols[0]:
-            st.write(f"**Eksport (Średnia):** € {best['exp']:,.2f}")
-            st.write(f"**Import (Średnia):** € {best['imp']:,.2f}")
-            st.write(f"**Postój przewoźnika:** € {best['stay']:,.2f}")
-        with cols[1]:
-            st.write(f"**Parking SQM:** € {best['park']:,.2f}")
-            st.write(f"**Odprawa ATA:** € {best['ata']:,.2f}")
-            st.write(f"**Promy / Mosty:** € {best['ferry']:,.2f}")
+        st.write("### 🚛 SZCZEGÓŁY KOSZTÓW")
+        st.json({
+            "Transport (Exp+Imp)": f"€ {best['exp']+best['imp']:,.2f}",
+            "Koszty Postoju": f"€ {best['stay']+best['park']:,.2f}",
+            "Opłaty Dodatkowe (ATA/UK)": f"€ {best['ata']+best['ferry']:,.2f}"
+        })
 
-    with cr:
+    with col2:
         st.write("### 📍 TRASA")
-        st.map(pd.DataFrame({'lat': [52.33, 48.85], 'lon': [16.81, 2.35]}), color='#ed8936', zoom=4)
-        st.success(f"Sugerowany dzień wyjazdu: {(d_start - timedelta(days=best['transit'])).strftime('%Y-%m-%d')}")
+        st.map(pd.DataFrame({'lat': [52.33, 48.85], 'lon': [16.81, 2.35]}), color='#ed8936')
