@@ -43,55 +43,39 @@ CITY_COORDS = {
     "Rzym": [41.9028, 12.4964], "Sztokholm": [59.3293, 18.0686]
 }
 
-st.set_page_config(page_title="SQM LOGISTICS v15.9", layout="wide")
+st.set_page_config(page_title="SQM LOGISTICS v16.0", layout="wide")
 
-# --- NAPRAWIONY CSS (WIDOCZNOŚĆ I STYL) ---
+# --- STYLE CSS (FIX WIDOCZNOŚCI) ---
 st.markdown("""
     <style>
     .stApp { background-color: #05070a !important; }
+    [data-testid="stSidebar"] { background-color: #0f172a !important; border-right: 1px solid #1e293b; }
     
-    [data-testid="stSidebar"] {
-        background-color: #0f172a !important;
-        border-right: 1px solid #1e293b;
-    }
-    
-    /* Wymuszenie czarnego tekstu w polach input */
-    div[data-baseweb="input"] input, 
-    div[data-baseweb="number-input"] input, 
-    div[data-baseweb="select"] div,
-    .stTextInput input, .stNumberInput input {
+    /* Naprawa pól tekstowych - czarny tekst, białe tło */
+    .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] {
         color: #000000 !important;
         background-color: #ffffff !important;
         -webkit-text-fill-color: #000000 !important;
-    }
-    
-    /* Etykiety w sidebarze na biało */
-    [data-testid="stSidebar"] label p {
-        color: #ffffff !important;
         font-weight: 600 !important;
     }
-
+    
+    [data-testid="stSidebar"] label p { color: #ffffff !important; font-weight: 700 !important; }
     [data-testid="stSidebarNav"] { display: none; }
 
-    .route-header { font-size: 32px !important; font-weight: 900; color: #ffffff; border-bottom: 3px solid #ed8936; margin-bottom: 25px; padding-bottom: 10px; }
-    .hero-card { background: linear-gradient(145deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 20px; padding: 35px; margin-bottom: 30px; }
-    .main-price-value { color: #ffffff; font-size: 85px; font-weight: 950; line-height: 1; margin: 15px 0; }
-    
+    .route-header { font-size: 32px !important; font-weight: 900; color: #ffffff; border-bottom: 3px solid #ed8936; margin-bottom: 25px; }
+    .hero-card { background: linear-gradient(145deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 20px; padding: 35px; }
+    .main-price-value { color: #ffffff; font-size: 85px; font-weight: 950; }
     .cost-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #1e293b; color: white; }
-    .alt-card { background: #0f172a; border-left: 5px solid #475569; padding: 15px 20px; margin-bottom: 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
-    .alt-best { border-left-color: #ed8936; background: rgba(237, 137, 54, 0.1); }
     </style>
 """, unsafe_allow_html=True)
 
-# --- SYSTEM LOGOWANIA ---
+# --- SYSTEM AUTORYZACJI ---
 def make_hash(p): return hashlib.sha256(p.strip().encode()).hexdigest()
 cookie_manager = stx.CookieManager()
 
 if "auth" not in st.session_state:
     st.session_state.auth = False
     st.session_state.user = None
-if "page" not in st.session_state:
-    st.session_state.page = "KALKULATOR"
 
 @st.cache_data(ttl=10)
 def load_users():
@@ -103,7 +87,7 @@ def load_users():
         return {"admin": "f3e99d9459eeb7ffc4cd407d890fbf1db011208fa12d8edc501a7ec26da106a3"}
 
 user_db = load_users()
-c_token = cookie_manager.get(cookie="sqm_session_v15")
+c_token = cookie_manager.get(cookie="sqm_session_v16")
 
 if c_token and c_token.lower() in user_db:
     st.session_state.auth, st.session_state.user = True, c_token
@@ -111,22 +95,20 @@ if c_token and c_token.lower() in user_db:
 if not st.session_state.auth:
     _, col, _ = st.columns([1, 1.2, 1])
     with col:
-        st.markdown("<h2 style='text-align:center; color:white; margin-top:50px;'>SQM LOGISTICS</h2>", unsafe_allow_html=True)
-        u_in = st.text_input("Użytkownik").strip().lower()
-        p_in = st.text_input("Hasło", type="password")
+        st.markdown("<h2 style='text-align:center; color:white;'>SQM LOGISTICS</h2>", unsafe_allow_html=True)
+        u_in = st.text_input("Użytkownik", key="login_u").strip().lower()
+        p_in = st.text_input("Hasło", type="password", key="login_p")
         if st.button("ZALOGUJ", use_container_width=True):
             if u_in in user_db and user_db[u_in] == make_hash(p_in):
                 st.session_state.auth, st.session_state.user = True, u_in
-                cookie_manager.set("sqm_session_v15", u_in, expires_at=datetime.now()+timedelta(days=7))
+                cookie_manager.set("sqm_session_v16", u_in, expires_at=datetime.now()+timedelta(days=7))
                 st.rerun()
     st.stop()
 
-# --- POBIERANIE DANYCH ---
+# --- DANE ---
 @st.cache_data(ttl=60)
 def fetch_logs():
     b = pd.read_csv(URL_BAZA); o = pd.read_csv(URL_OPLATY); b.columns = b.columns.str.strip()
-    if 'Dostawca' in b.columns:
-        b = b[~b['Dostawca'].str.contains('SQM|Własny|Wlasny', case=False, na=False)]
     def clean(v):
         s = re.sub(r'[^\d.]', '', str(v).replace(',', '.')); return float(s) if s else 0.0
     for c in ['Eksport', 'Import', 'Postoj']: b[c] = b[c].apply(clean)
@@ -138,44 +120,48 @@ cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc']))
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.markdown("<br>", unsafe_allow_html=True)
     st.image("https://www.sqm.pl/wp-content/themes/sqm/img/logo-sqm.png", width=180)
-    st.markdown(f"<div style='color: #ed8936 !important; font-size: 16px; font-weight: 800; margin: 20px 0;'>Zalogowany: {st.session_state.user.upper()}</div>", unsafe_allow_html=True)
+    st.markdown(f"**Użytkownik:** {st.session_state.user.upper()}")
     
-    # Nawigacja - tylko admin widzi Admin Tool
-    nav_options = ["KALKULATOR"]
-    if st.session_state.user.lower() == "admin":
-        nav_options.append("ADMIN TOOL")
-    
-    st.session_state.page = st.radio("NAWIGACJA", nav_options)
+    # NAWIGACJA
+    page = st.radio("MODUŁ", ["KALKULATOR", "ADMIN TOOL"])
     st.markdown("---")
     
-    if st.session_state.page == "KALKULATOR":
+    if page == "KALKULATOR":
         mode = st.radio("STRATEGIA", ["DEDYKOWANY", "DOŁADUNEK"])
         target = st.selectbox("CEL PODRÓŻY", sorted(TRANSIT_DATA.keys()))
-        weight = st.number_input("WAGA ŁADUNKU (kg)", value=1000, step=500)
-        d_start = st.date_input("DATA ZAŁADUNKU", datetime.now() + timedelta(days=5))
-        d_end = st.date_input("DATA POWROTU", datetime.now() + timedelta(days=10))
+        weight = st.number_input("WAGA (kg)", value=1000, step=500)
+        d_start = st.date_input("ZAŁADUNEK", datetime.now() + timedelta(days=5))
+        d_end = st.date_input("POWRÓT", datetime.now() + timedelta(days=10))
         days_stay = max(0, (d_end - d_start).days)
     
-    if st.button("WYLOGUJ MNIE", use_container_width=True):
-        cookie_manager.delete("sqm_session_v15")
-        st.session_state.auth = False
+    # PRZYCISK WYLOGOWANIA (NAPRAWIONY)
+    if st.button("🔴 WYLOGUJ", use_container_width=True):
+        cookie_manager.delete("sqm_session_v16")
+        for key in st.session_state.keys():
+            del st.session_state[key]
         st.rerun()
 
-# --- MODUŁY ---
-if st.session_state.page == "ADMIN TOOL":
-    if st.session_state.user.lower() != "admin":
-        st.error("Brak uprawnień do tej sekcji.")
-    else:
-        st.markdown('<div class="route-header">ADMIN TOOL</div>', unsafe_allow_html=True)
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write("### ⚙️ OPŁATY STAŁE")
-            st.data_editor(df_oplaty, use_container_width=True, hide_index=True)
-        with col2:
-            st.write("### 🚛 BAZA STAWEK")
-            st.data_editor(df_baza, use_container_width=True, hide_index=True)
+# --- LOGIKA MODUŁÓW ---
+if page == "ADMIN TOOL":
+    st.markdown('<div class="route-header">ADMIN TOOL & GENERATOR</div>', unsafe_allow_html=True)
+    
+    # Sekcja Generatora Haseł
+    st.write("### 🔑 GENERATOR HASHY (DLA ARKUSZA USERS)")
+    raw_p = st.text_input("Wpisz nowe hasło do zahashowania:", type="password")
+    if raw_p:
+        new_h = make_hash(raw_p)
+        st.code(new_h, language="text")
+        st.info("Skopiuj powyższy kod i wklej go do kolumny 'password' w arkuszu USERS.")
+    
+    st.markdown("---")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write("### ⚙️ EDYCJA OPŁAT")
+        st.data_editor(df_oplaty, use_container_width=True)
+    with col2:
+        st.write("### 🚛 PODGLĄD BAZY")
+        st.dataframe(df_baza, use_container_width=True)
 
 else:
     # --- KALKULACJE ---
@@ -188,56 +174,41 @@ else:
         if not res.empty:
             r = res.mean(numeric_only=True)
             v_count = math.ceil(w_eff / cap)
-            t_key = "BUS" if v_type == "BUS" else "FTL/SOLO"
-            transit_days = TRANSIT_DATA.get(target, {}).get(t_key, 2)
+            transit_days = TRANSIT_DATA.get(target, {}).get("BUS" if v_type == "BUS" else "FTL/SOLO", 2)
             
             exp = (r['Eksport'] * v_count if mode == "DEDYKOWANY" else r['Eksport'] * (w_eff/cap))
             imp = (r['Import'] * v_count if mode == "DEDYKOWANY" else r['Import'] * (w_eff/cap))
             ata = (cfg.get('ATA_CARNET', 166) if target in ["Londyn", "Genewa", "Liverpool", "Manchester"] else 0)
-            ferry = (cfg.get('Ferry_UK', 450) if any(x in target for x in ["Londyn", "Liverpool", "Manchester"]) else 0)
+            ferry = (cfg.get('Ferry_UK', 450) if "Londyn" in target or "Manchester" in target else 0)
             parking = (days_stay * cfg.get('PARKING_DAY', 30) * v_count)
             stay_cost = r['Postoj'] * days_stay * v_count
             
             results.append({
-                "Pojazd": v_type, "Szt": v_count, "Total": exp+imp+stay_cost+parking+ata+ferry, 
-                "exp": exp, "imp": imp, "stay": stay_cost, "park": parking, "ata": ata, 
-                "ferry": ferry, "transit": transit_days, "load": min(100, (w_eff/(v_count*cap))*100)
+                "Pojazd": v_type, "Szt": v_count, "Total": exp+imp+stay_cost+parking+ata+ferry,
+                "exp": exp, "imp": imp, "transit": transit_days, "load": min(100, (w_eff/(v_count*cap))*100)
             })
 
     if results:
         best = min(results, key=lambda x: x['Total'])
-        st.markdown(f'<div class="route-header">KOMORNIKI ➔ {target.upper()}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="route-header">TRASA: KOMORNIKI ➔ {target.upper()}</div>', unsafe_allow_html=True)
         
-        cl, cr = st.columns([1.8, 1])
-        with cl:
+        c1, c2 = st.columns([2, 1])
+        with c1:
             st.markdown(f"""
                 <div class="hero-card">
-                    <div style="color: #ed8936; font-size: 14px; font-weight: 800;">SUGEROWANA STAWKA (NETTO)</div>
+                    <div style="color: #ed8936; font-weight: 800;">ESTYMACJA KOSZTÓW (NETTO)</div>
                     <div class="main-price-value">€ {best['Total']:,.2f}</div>
-                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 25px;">
-                        <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px;">
-                            <div style="color: #94a3b8; font-size: 10px;">TRANZYT</div><div style="color: white; font-size: 20px; font-weight: 700;">{best['transit']} dni</div>
-                        </div>
-                        <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px;">
-                            <div style="color: #94a3b8; font-size: 10px;">POSTÓJ</div><div style="color: white; font-size: 20px; font-weight: 700;">{days_stay} dni</div>
-                        </div>
-                        <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px;">
-                            <div style="color: #94a3b8; font-size: 10px;">POJAZD</div><div style="color: white; font-size: 20px; font-weight: 700;">{best['Pojazd']}</div>
-                        </div>
-                         <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px;">
-                            <div style="color: #94a3b8; font-size: 10px;">ŁADUNEK</div><div style="color: white; font-size: 20px; font-weight: 700;">{best['load']:.0f}%</div>
-                        </div>
-                    </div>
+                    <p style="color: #94a3b8;">Najlepsza opcja: {best['Pojazd']} ({best['Szt']} szt.) | Załadowanie: {best['load']:.0f}%</p>
                 </div>
             """, unsafe_allow_html=True)
             
-            st.write("### 📊 SZCZEGÓŁY")
-            st.markdown(f'<div class="cost-row"><span>Eksport:</span><span>€ {best["exp"]:,.2f}</span></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="cost-row"><span>Import:</span><span>€ {best["imp"]:,.2f}</span></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="cost-row"><span>Dodatki (Prom/ATA/Park):</span><span>€ {best["ata"]+best["ferry"]+best["park"]:,.2f}</span></div>', unsafe_allow_html=True)
+            st.write("### 🚛 INNE MOŻLIWOŚCI")
+            for r in sorted(results, key=lambda x: x['Total']):
+                st.markdown(f"**{r['Pojazd']}**: € {r['Total']:,.2f} (Tranzyt: {r['transit']} dni)")
 
-        with cr:
-            b_pos, d_pos = CITY_COORDS["Komorniki (Baza)"], CITY_COORDS.get(target, [48.8, 2.3])
-            path_df = pd.DataFrame({'lat': np.linspace(b_pos[0], d_pos[0], 25), 'lon': np.linspace(b_pos[1], d_pos[1], 25)})
-            st.write("### 📍 TRASA")
-            st.map(path_df, color='#ed8936', size=15)
+        with c2:
+            st.write("### 📍 MAPA I TERMINY")
+            b_p, d_p = CITY_COORDS["Komorniki (Baza)"], CITY_COORDS.get(target, [48.8, 2.3])
+            path_df = pd.DataFrame({'lat': np.linspace(b_p[0], d_p[0], 20), 'lon': np.linspace(b_p[1], d_p[1], 20)})
+            st.map(path_df, color='#ed8936')
+            st.info(f"Sugerowany wyjazd: {(d_start - timedelta(days=best['transit'])).strftime('%Y-%m-%d')}")
