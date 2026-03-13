@@ -44,9 +44,9 @@ CITY_COORDS = {
     "Rzym": [41.9028, 12.4964], "Sztokholm": [59.3293, 18.0686]
 }
 
-st.set_page_config(page_title="SQM VENTAGE v5.0.1", layout="wide")
+st.set_page_config(page_title="SQM VENTAGE v5.0.2", layout="wide")
 
-# --- CSS Z NOWYM LOGO I POPRAWKAMI ---
+# --- CSS Z AKTUALIZACJĄ KOLORÓW I ETYKIET ---
 st.markdown("""
     <style>
     .stApp { background-color: #05070a !important; }
@@ -79,9 +79,10 @@ st.markdown("""
     }
     .brand-ver {
         font-size: 10px;
-        color: #475569;
+        color: #ffffff !important; /* Zmiana na biały */
         margin-top: 5px;
         font-weight: 600;
+        opacity: 0.9;
     }
 
     /* Sidebar Fixes */
@@ -98,6 +99,12 @@ st.markdown("""
         -webkit-text-fill-color: #ffffff !important;
     }
     [data-testid="stSidebar"] label p { color: #94a3b8 !important; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; }
+    
+    /* Zmiana koloru nagłówków H3 w Sidebarze na biały (np. PARAMETRY) */
+    [data-testid="stSidebar"] h3 {
+        color: #ffffff !important;
+        font-size: 1.1rem !important;
+    }
 
     /* UI Components */
     .route-header { font-size: 32px !important; font-weight: 900; color: #ffffff; border-bottom: 3px solid #ed8936; margin-bottom: 25px; padding-bottom: 10px; }
@@ -144,15 +151,15 @@ if not st.session_state.authenticated:
     _, col, _ = st.columns([1, 1.2, 1])
     with col:
         st.markdown("<h2 style='text-align:center; color:white;'>SQM VENTAGE</h2>", unsafe_allow_html=True)
-        u_in = st.text_input("User"); p_in = st.text_input("Pass", type="password")
-        if st.button("LOGIN"):
+        u_in = st.text_input("Użytkownik"); p_in = st.text_input("Hasło", type="password")
+        if st.button("ZALOGUJ"):
             if u_in in user_db and user_db[u_in] == make_hash(p_in):
                 st.session_state.authenticated = True; st.session_state.user_id = u_in
                 cookie_manager.set("sqm_session_v5", u_in, expires_at=datetime.now()+timedelta(days=7))
                 st.rerun()
     st.stop()
 
-# --- DANE ---
+# --- POBIERANIE DANYCH ---
 @st.cache_data(ttl=60)
 def fetch_logs():
     try:
@@ -171,7 +178,6 @@ cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc'])) if not df_oplaty.em
 
 # --- SIDEBAR VENTAGE ---
 with st.sidebar:
-    # Nowy Branding
     st.markdown("""
         <div class="brand-container">
             <div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div>
@@ -180,10 +186,8 @@ with st.sidebar:
     """, unsafe_allow_html=True)
     
     st.image("https://www.sqm.pl/wp-content/themes/sqm/img/logo-sqm.png", width=150)
-    
     st.markdown(f"<div style='color:#94a3b8; font-size:11px; margin-bottom:20px;'>OPERATOR: <b>{st.session_state.user_id.upper()}</b></div>", unsafe_allow_html=True)
     
-    # OPCJE WYCENY
     st.markdown("### 🚛 PARAMETRY")
     trip_type = st.radio("KIERUNEK", ["PEŁNA TRASA (EXP+IMP)", "TYLKO DOSTAWA (ONE-WAY)"])
     mode = st.radio("STRATEGIA", ["DEDYKOWANY", "DOŁADUNEK"])
@@ -191,11 +195,10 @@ with st.sidebar:
     weight = st.number_input("WAGA (KG)", value=1000, step=500, min_value=1)
     
     st.markdown("### 📅 TERMINARZ")
-    d_start = st.date_input("ZAŁADUNEK", datetime.now() + timedelta(days=5))
+    d_start = st.date_input("PIERWSZY DZIEŃ MONTAŻU", datetime.now() + timedelta(days=5))
     
-    # Wyłączamy datę powrotu jeśli to One-Way
     if trip_type == "PEŁNA TRASA (EXP+IMP)":
-        d_end = st.date_input("POWRÓT", d_start + timedelta(days=5))
+        d_end = st.date_input("OSTATNI DZIEŃ DEMONTAŻU", d_start + timedelta(days=5))
         days_stay = max(0, (d_end - d_start).days)
     else:
         days_stay = 0
@@ -216,7 +219,6 @@ if not df_baza.empty:
             r = res.mean(numeric_only=True); v_count = math.ceil(w_eff / cap)
             transit_days = TRANSIT_DATA.get(target, {}).get("BUS" if v_type=="BUS" else "FTL/SOLO", 2)
             
-            # Logika One-Way vs Pełna Trasa
             exp = (r['Eksport'] * v_count if mode == "DEDYKOWANY" else r['Eksport'] * (w_eff/cap))
             imp = (r['Import'] * v_count if mode == "DEDYKOWANY" else r['Import'] * (w_eff/cap)) if trip_type == "PEŁNA TRASA (EXP+IMP)" else 0
             
@@ -228,7 +230,7 @@ if not df_baza.empty:
             total = exp + imp + stay + park + ata + ferry
             results.append({"Pojazd": v_type, "Szt": v_count, "Total": total, "transit": transit_days, "load": min(100, (w_eff/(v_count*cap))*100)})
 
-# --- WIDOK ---
+# --- WIDOK GŁÓWNY ---
 if results:
     best = min(results, key=lambda x: x['Total'])
     st.markdown(f'<div class="route-header">KOMORNIKI ➔ {target.upper()} <small style="font-size:14px; color:#94a3b8;">({trip_type})</small></div>', unsafe_allow_html=True)
@@ -237,14 +239,14 @@ if results:
         st.markdown(f"""<div class="hero-card"><div style='color:#ed8936;font-size:14px;font-weight:800;'>KOSZT SZACUNKOWY NETTO</div><div class="main-price-value">€ {best['Total']:,.2f}</div>
                     <div style='display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-top:25px;'>
                     <div style='background:rgba(255,255,255,0.05);padding:15px;border-radius:10px;'><div style='color:#94a3b8;font-size:10px;font-weight:700;'>TRANZYT</div><div style='color:white;font-size:22px;font-weight:900;'>{best['transit']} dni</div></div>
-                    <div style='background:rgba(255,255,255,0.05);padding:15px;border-radius:10px;'><div style='color:#94a3b8;font-size:10px;font-weight:700;'>POSTÓJ</div><div style='color:white;font-size:22px;font-weight:900;'>{days_stay}d</div></div>
+                    <div style='background:rgba(255,255,255,0.05);padding:15px;border-radius:10px;'><div style='color:#94a3b8;font-size:10px;font-weight:700;'>DNI NA TARGACH</div><div style='color:white;font-size:22px;font-weight:900;'>{days_stay}d</div></div>
                     <div style='background:rgba(255,255,255,0.05);padding:15px;border-radius:10px;'><div style='color:#94a3b8;font-size:10px;font-weight:700;'>OPCJA</div><div style='color:white;font-size:22px;font-weight:900;'>{best['Pojazd']}</div></div>
-                    <div style='background:rgba(255,255,255,0.05);padding:15px;border-radius:10px;'><div style='color:#94a3b8;font-size:10px;font-weight:700;'>LOAD</div><div style='color:white;font-size:22px;font-weight:900;'>{best['load']:.0f}%</div></div></div></div>""", unsafe_allow_html=True)
-        st.write("### 🚛 ANALIZA KOSZTÓW")
+                    <div style='background:rgba(255,255,255,0.05);padding:15px;border-radius:10px;'><div style='color:#94a3b8;font-size:10px;font-weight:700;'>ZAPEŁNIENIE</div><div style='color:white;font-size:22px;font-weight:900;'>{best['load']:.0f}%</div></div></div></div>""", unsafe_allow_html=True)
+        st.write("### 🚛 ANALIZA KOSZTÓW POJAZDÓW")
         for r in sorted(results, key=lambda x: x['Total']):
             is_best = "alt-best" if r['Pojazd'] == best['Pojazd'] else ""
-            st.markdown(f"""<div class="alt-card {is_best}"><div><b>{r['Pojazd']}</b> <small>({r['Szt']} szt. | {r['load']:.0f}%)</small></div><div class="price-tag">€ {r['Total']:,.2f}</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div class="alt-card {is_best}"><div><b>{r['Pojazd']}</b> <small>({r['Szt']} szt. | Załadunek {r['load']:.0f}%)</small></div><div class="price-tag">€ {r['Total']:,.2f}</div></div>""", unsafe_allow_html=True)
     with cr:
         b_pos, d_pos = CITY_COORDS["Komorniki (Baza)"], CITY_COORDS.get(target, [48.8, 2.3])
         st.map(pd.DataFrame({'lat': np.linspace(b_pos[0], d_pos[0], 25), 'lon': np.linspace(b_pos[1], d_pos[1], 25)}), color='#ed8936', size=15)
-        st.info(f"**Data Załadunku:** {d_start}")
+        st.info(f"**Montaż start:** {d_start}")
