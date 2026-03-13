@@ -44,32 +44,58 @@ CITY_COORDS = {
     "Rzym": [41.9028, 12.4964], "Sztokholm": [59.3293, 18.0686]
 }
 
-st.set_page_config(page_title="SQM LOGISTICS v16.4", layout="wide")
+st.set_page_config(page_title="SQM LOGISTICS v16.5", layout="wide")
 
-# --- CSS Z POPRAWKĄ WIDOCZNOŚCI DAT ---
+# --- NAPRAWIONY CSS (KOLORY PÓL WEJŚCIOWYCH) ---
 st.markdown("""
     <style>
+    /* Globalne tło */
     .stApp { background-color: #05070a !important; }
-    [data-testid="stSidebar"] { background-color: #0f172a !important; border-right: 1px solid #1e293b; }
     
-    /* Etykiety i nagłówki w sidebarze */
-    [data-testid="stSidebar"] label p { color: #94a3b8 !important; font-size: 0.8rem !important; font-weight: 700 !important; text-transform: uppercase; letter-spacing: 0.5px; }
-    .sidebar-header { color: #ed8936; font-size: 1rem; font-weight: 800; margin: 25px 0 10px 0; padding-bottom: 5px; border-bottom: 1px solid #1e293b; display: flex; align-items: center; gap: 10px; }
-
-    /* POPRAWKA CZCIONKI W POLACH DATY I INPUTACH */
-    div[data-baseweb="input"] input {
-        color: #ffffff !important; 
-        -webkit-text-fill-color: #ffffff !important;
+    /* Sidebar */
+    [data-testid="stSidebar"] { 
+        background-color: #0f172a !important; 
+        border-right: 1px solid #1e293b; 
     }
     
-    div[data-baseweb="select"] > div {
+    /* Naprawa kolorów wszystkich pól input w sidebarze */
+    [data-testid="stSidebar"] div[data-baseweb="input"], 
+    [data-testid="stSidebar"] div[data-baseweb="select"] {
+        background-color: #1e293b !important;
+        border: 1px solid #334155 !important;
+        border-radius: 8px !important;
+    }
+
+    /* Wymuszenie białego koloru czcionki w polach tekstowych i numerycznych */
+    [data-testid="stSidebar"] input {
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+    }
+
+    /* Naprawa koloru tekstu w Selectbox (cel podróży) */
+    [data-testid="stSidebar"] div[data-baseweb="select"] span {
         color: #ffffff !important;
     }
 
-    /* Styl tła dla pól input w sidebarze */
-    div[data-baseweb="input"], div[data-baseweb="select"], .stDateInput {
-        background-color: #1e293b !important;
-        border-radius: 8px !important;
+    /* Styl etykiet (Label) */
+    [data-testid="stSidebar"] label p { 
+        color: #94a3b8 !important; 
+        font-size: 0.8rem !important; 
+        font-weight: 700 !important; 
+        text-transform: uppercase; 
+        letter-spacing: 0.5px; 
+    }
+
+    .sidebar-header { 
+        color: #ed8936; 
+        font-size: 1rem; 
+        font-weight: 800; 
+        margin: 25px 0 10px 0; 
+        padding-bottom: 5px; 
+        border-bottom: 1px solid #1e293b; 
+        display: flex; 
+        align-items: center; 
+        gap: 10px; 
     }
 
     [data-testid="stSidebarNav"] { display: none; }
@@ -112,14 +138,12 @@ def load_users():
 
 user_db = load_users()
 
-# Odczyt ciasteczka
 if not st.session_state.authenticated and not st.session_state.logout_triggered:
     c_token = cookie_manager.get(cookie="sqm_session_v16")
     if c_token and c_token in user_db:
         st.session_state.authenticated = True
         st.session_state.user_id = c_token
 
-# EKRAN LOGOWANIA
 if not st.session_state.authenticated:
     _, col, _ = st.columns([1, 1.2, 1])
     with col:
@@ -174,10 +198,9 @@ with st.sidebar:
     st.markdown('<div class="sidebar-header">⚙️ KONFIGURACJA</div>', unsafe_allow_html=True)
     mode = st.radio("STRATEGIA", ["DEDYKOWANY", "DOŁADUNEK"])
     target = st.selectbox("CEL PODRÓŻY", sorted(TRANSIT_DATA.keys()))
-    weight = st.number_input("WAGA (kg)", value=1000, step=500, min_value=1)
+    weight = st.number_input("WAGA (KG)", value=1000, step=500, min_value=1)
     
     st.markdown('<div class="sidebar-header">📅 TERMINARZ</div>', unsafe_allow_html=True)
-    # Daty z poprawionym stylem czcionki
     d_start = st.date_input("ZAŁADUNEK", datetime.now() + timedelta(days=5))
     d_end = st.date_input("POWRÓT", datetime.now() + timedelta(days=10))
     days_stay = max(0, (d_end - d_start).days)
