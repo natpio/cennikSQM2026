@@ -21,17 +21,40 @@ CITY_COORDS = {
     "Monachium": [48.1351, 11.5820], "Mediolan": [45.4642, 9.1900]
 }
 
-st.set_page_config(page_title="SQM LOGISTICS v14.6", layout="wide")
+st.set_page_config(page_title="SQM LOGISTICS v14.7", layout="wide")
 
-# --- CSS (Minimalistyczny dla stabilności) ---
+# --- CSS (Maksymalny Kontrast i Czytelność) ---
 st.markdown("""
     <style>
-    .stApp { background: #0a0e14 !important; }
-    [data-testid="stMetricValue"] { color: #ed8936 !important; font-size: 42px !important; font-weight: 800; }
-    .main-price-box { background: rgba(237, 137, 54, 0.05); border: 1px solid #ed8936; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
-    .route-header { font-size: 26px; font-weight: 800; color: white; border-bottom: 2px solid #ed8936; padding-bottom: 5px; margin-bottom: 20px; }
-    .cost-label { color: #94a3b8; font-size: 0.8rem; font-weight: bold; }
-    .cost-val { color: white; font-size: 1.1rem; font-weight: 600; margin-bottom: 10px; }
+    .stApp { background-color: #0e1117 !important; }
+    
+    /* Nagłówek Trasy */
+    .route-header { 
+        font-size: 32px !important; font-weight: 800; color: #ffffff; 
+        padding: 15px 0; border-bottom: 3px solid #ed8936; margin-bottom: 25px;
+        text-transform: uppercase; letter-spacing: 2px;
+    }
+    
+    /* Główna Karta Ceny */
+    .main-card {
+        background: #1a1f29; border: 2px solid #2d3748; border-radius: 15px;
+        padding: 25px; margin-bottom: 20px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+    }
+    .price-label { color: #ed8936; font-size: 14px; font-weight: bold; text-transform: uppercase; }
+    .price-value { color: #ffffff; font-size: 64px; font-weight: 900; margin: 10px 0; }
+    
+    /* Detale i Składowe */
+    .detail-box { background: #262c38; padding: 15px; border-radius: 10px; border-left: 4px solid #ed8936; }
+    .detail-label { color: #a0aec0; font-size: 12px; margin-bottom: 5px; }
+    .detail-value { color: #ffffff; font-size: 18px; font-weight: bold; }
+    
+    .cost-grid-item { border-bottom: 1px solid #2d3748; padding: 8px 0; display: flex; justify-content: space-between; }
+    .cost-name { color: #cbd5e0; }
+    .cost-amount { color: #ffffff; font-weight: bold; }
+    
+    /* Tabela */
+    .stTable { background-color: #1a1f29 !important; border-radius: 10px; overflow: hidden; }
+    th { background-color: #2d3748 !important; color: #ed8936 !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -83,16 +106,18 @@ cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc']))
 # --- SIDEBAR ---
 with st.sidebar:
     st.image("https://www.sqm.pl/wp-content/themes/sqm/img/logo-sqm.png", width=120)
-    st.info(f"Logistyka: {st.session_state.user}")
+    st.write(f"👤 **{st.session_state.user}**")
+    st.divider()
     
     mode = st.radio("STRATEGIA", ["DEDYKOWANY", "DOŁADUNEK"])
-    target = st.selectbox("MIProject_Target", sorted(df_baza['Miasto'].unique()))
+    target = st.selectbox("MIASTO DOCELOWE", sorted(df_baza['Miasto'].unique()))
     weight = st.number_input("WAGA SPRZĘTU (kg)", value=1000, step=500)
     
     d_start = st.date_input("PIERWSZY DZIEŃ MONTAŻU", datetime.now())
     d_end = st.date_input("OSTATNI DZIEŃ MONTAŻU", datetime.now() + timedelta(days=2))
     days = max(0, (d_end - d_start).days)
     
+    st.divider()
     if st.button("WYLOGUJ"):
         cookie_manager.delete("sqm_v14_session")
         st.session_state.auth = False
@@ -123,7 +148,7 @@ for v_type, cap in caps.items():
         
         total = exp + imp + stay_cost + parking + ata + ferry
         results.append({
-            "Pojazd": v_type, "Szt.": v_count, "Ładunek": f"{load_pc:.0f}%", 
+            "Pojazd": v_type, "Szt": v_count, "Załadunek": f"{load_pc:.0f}%", 
             "Suma": total, "exp": exp, "imp": imp, "stay": stay_cost, 
             "park": parking, "ata": ata, "ferry": ferry
         })
@@ -133,36 +158,50 @@ if results:
     
     st.markdown(f'<div class="route-header">LOGISTYKA: KOMORNIKI ➔ {target.upper()}</div>', unsafe_allow_html=True)
     
-    col_main, col_map = st.columns([1.6, 1])
+    col_left, col_right = st.columns([1.8, 1])
     
-    with col_main:
-        with st.container():
-            st.markdown('<div class="main-price-box">', unsafe_allow_html=True)
-            st.metric("REKOMENDOWANA STAWKA (NETTO)", f"€ {best['Suma']:,.2f}")
-            
-            c1, c2, c3 = st.columns(3)
-            c1.markdown(f'<div class="cost-label">POJAZD</div><div class="cost-val">{best["Pojazd"]} ({best["Szt."]} szt.)</div>', unsafe_allow_html=True)
-            c2.markdown(f'<div class="cost-label">WAGA (+20%)</div><div class="cost-val">{w_eff:,.0f} kg</div>', unsafe_allow_html=True)
-            c3.markdown(f'<div class="cost-label">ZAŁADOWANIE</div><div class="cost-val">{best["Ładunek"]}</div>', unsafe_allow_html=True)
-            
-            st.markdown('<div style="margin-top:20px; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;"></div>', unsafe_allow_html=True)
-            st.write("**SZCZEGÓŁOWE SKŁADOWE KOSZTÓW:**")
-            
-            sc1, sc2, sc3 = st.columns(3)
-            sc1.markdown(f"**Eksport:** € {best['exp']:,.2f}")
-            sc1.markdown(f"**Import:** € {best['imp']:,.2f}")
-            sc2.markdown(f"**Postój:** € {best['stay']:,.2f}")
-            sc2.markdown(f"**Parkingi:** € {best['park']:,.2f}")
-            sc3.markdown(f"**ATA/Cło:** € {best['ata']:,.2f}")
-            sc3.markdown(f"**Promy/Mosty:** € {best['ferry']:,.2f}")
-            st.markdown('</div>', unsafe_allow_html=True)
+    with col_left:
+        # GŁÓWNA KARTA CENOWA
+        st.markdown(f"""
+            <div class="main-card">
+                <div class="price-label">Rekomendowana Stawka Projektu (Netto)</div>
+                <div class="price-value">€ {best['Suma']:,.2f}</div>
+                <div style="display: flex; gap: 30px; margin-top: 20px;">
+                    <div class="detail-box">
+                        <div class="detail-label">TYP POJAZDU</div>
+                        <div class="detail-value">{best['Pojazd']} ({best['Szt']} szt.)</div>
+                    </div>
+                    <div class="detail-box">
+                        <div class="detail-label">WAGA Z BUFOREM</div>
+                        <div class="detail-value">{w_eff:,.0f} kg</div>
+                    </div>
+                    <div class="detail-box">
+                        <div class="detail-label">WYKORZYSTANIE</div>
+                        <div class="detail-value">{best['Załadunek']}</div>
+                    </div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # SKŁADOWE KOSZTÓW
+        st.markdown("### 📊 SZCZEGÓŁOWE ZESTAWIENIE KOSZTÓW:")
+        sc1, sc2 = st.columns(2)
+        with sc1:
+            st.markdown(f'<div class="cost-grid-item"><span class="cost-name">Eksport (Srednia):</span><span class="cost-amount">€ {best["exp"]:,.2f}</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="cost-grid-item"><span class="cost-name">Import (Srednia):</span><span class="cost-amount">€ {best["imp"]:,.2f}</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="cost-grid-item"><span class="cost-name">Postój przewoźnika:</span><span class="cost-amount">€ {best["stay"]:,.2f}</span></div>', unsafe_allow_html=True)
+        with sc2:
+            st.markdown(f'<div class="cost-grid-item"><span class="cost-name">Parkingi SQM:</span><span class="cost-amount">€ {best["park"]:,.2f}</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="cost-grid-item"><span class="cost-name">Odprawa ATA:</span><span class="cost-amount">€ {best["ata"]:,.2f}</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="cost-grid-item"><span class="cost-name">Promy / Mosty:</span><span class="cost-amount">€ {best["ferry"]:,.2f}</span></div>', unsafe_allow_html=True)
 
-        st.write("### PORÓWNANIE ROZWIĄZAŃ")
-        df_res = pd.DataFrame(results)[["Pojazd", "Szt.", "Ładunek", "Suma"]]
-        df_res["Suma"] = df_res["Suma"].map("€ {:,.2f}".format)
-        st.table(df_res)
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.write("### 🚛 PORÓWNANIE ALTERNATYW")
+        df_show = pd.DataFrame(results)[["Pojazd", "Szt", "Załadunek", "Suma"]]
+        df_show["Suma"] = df_show["Suma"].map("€ {:,.2f}".format)
+        st.table(df_show)
 
-    with col_map:
+    with col_right:
         base, dest = CITY_COORDS["Komorniki (Baza)"], CITY_COORDS.get(target, [52.5, 13.4])
         st.map(pd.DataFrame({'lat': [base[0], dest[0]], 'lon': [base[1], dest[1]]}), color='#ed8936')
-        st.info(f"Czas trwania montażu/postoju: {days} dni.")
+        st.info(f"Czas operacji: {days} dni postoju na miejscu.")
