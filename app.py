@@ -44,7 +44,7 @@ CITY_COORDS = {
     "Rzym": [41.9028, 12.4964], "Sztokholm": [59.3293, 18.0686]
 }
 
-st.set_page_config(page_title="SQM LOGISTICS v15.4", layout="wide")
+st.set_page_config(page_title="SQM LOGISTICS v15.5", layout="wide")
 
 # --- CUSTOM CSS ---
 st.markdown("""
@@ -66,7 +66,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- SYSTEM LOGOWANIA ---
+# --- LOGIN SYSTEM ---
 def make_hash(p): return hashlib.sha256(p.strip().encode()).hexdigest()
 cookie_manager = stx.CookieManager()
 
@@ -77,15 +77,12 @@ if "auth" not in st.session_state:
 @st.cache_data(ttl=10)
 def load_users():
     try:
-        df = pd.read_csv(URL_USERS)
-        df.columns = df.columns.str.strip()
+        df = pd.read_csv(URL_USERS); df.columns = df.columns.str.strip()
         return dict(zip(df['username'].astype(str), df['password'].astype(str)))
     except:
         return {"admin": "f3e99d9459eeb7ffc4cd407d890fbf1db011208fa12d8edc501a7ec26da106a3"}
 
 user_db = load_users()
-
-# Sprawdzenie ciasteczek
 c_token = cookie_manager.get(cookie="sqm_session_v15")
 if c_token in user_db:
     st.session_state.auth = True
@@ -94,56 +91,46 @@ if c_token in user_db:
 if not st.session_state.auth:
     _, col, _ = st.columns([1, 1.2, 1])
     with col:
-        st.markdown("<h2 style='text-align:center; color:white; margin-top:50px;'>LOGOWANIE SQM</h2>", unsafe_allow_html=True)
+        st.markdown("<h2 style='text-align:center; color:white; margin-top:50px;'>SQM LOGISTICS</h2>", unsafe_allow_html=True)
         u_in = st.text_input("Użytkownik")
         p_in = st.text_input("Hasło", type="password")
         if st.button("ZALOGUJ", use_container_width=True):
             if u_in in user_db and user_db[u_in] == make_hash(p_in):
-                st.session_state.auth = True
-                st.session_state.user = u_in
+                st.session_state.auth, st.session_state.user = True, u_in
                 cookie_manager.set("sqm_session_v15", u_in, expires_at=datetime.now()+timedelta(days=7))
                 st.rerun()
-            else:
-                st.error("Błędne dane logowania")
     st.stop()
 
-# --- POBIERANIE DANYCH ---
+# --- DATA FETCHING ---
 @st.cache_data(ttl=60)
 def fetch_logs():
-    b = pd.read_csv(URL_BAZA)
-    o = pd.read_csv(URL_OPLATY)
-    b.columns = b.columns.str.strip()
-    # Filtr dostawców własnych
+    b = pd.read_csv(URL_BAZA); o = pd.read_csv(URL_OPLATY); b.columns = b.columns.str.strip()
     if 'Dostawca' in b.columns:
         b = b[~b['Dostawca'].str.contains('SQM|Własny|Wlasny', case=False, na=False)]
     def clean(v):
         s = re.sub(r'[^\d.]', '', str(v).replace(',', '.')); return float(s) if s else 0.0
-    for c in ['Eksport', 'Import', 'Postoj']: 
-        b[c] = b[c].apply(clean)
+    for c in ['Eksport', 'Import', 'Postoj']: b[c] = b[c].apply(clean)
     o['Wartosc'] = o['Wartosc'].apply(clean)
     return b, o
 
 df_baza, df_oplaty = fetch_logs()
 cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc']))
 
-# --- SIDEBAR (image_be078e.png) ---
+# --- SIDEBAR ---
 with st.sidebar:
     st.image("https://www.sqm.pl/wp-content/themes/sqm/img/logo-sqm.png", width=150)
     st.write(f"Zalogowany: **{st.session_state.user}**")
     st.markdown("---")
     mode = st.radio("STRATEGIA", ["DEDYKOWANY", "DOŁADUNEK"])
-    target = st.selectbox("MIASTO DOCELOWE", sorted(TRANSIT_DATA.keys()))
+    target = st.selectbox("CEL", sorted(TRANSIT_DATA.keys()))
     weight = st.number_input("WAGA SPRZĘTU (kg)", value=1000, step=500)
-    d_start = st.date_input("PIERWSZY DZIEŃ MONTAŻU", datetime.now() + timedelta(days=7))
-    d_end = st.date_input("OSTATNI DZIEŃ MONTAŻU", datetime.now() + timedelta(days=10))
+    d_start = st.date_input("ZAŁADUNEK / START POSTOJU", datetime.now() + timedelta(days=5))
+    d_end = st.date_input("KONIEC POSTOJU", datetime.now() + timedelta(days=10))
     days_stay = max(0, (d_end - d_start).days)
-    
-    if st.button("WYLOGUJ", use_container_width=True):
-        cookie_manager.delete("sqm_session_v15")
-        st.session_state.auth = False
-        st.rerun()
+    if st.button("WYLOGUJ"):
+        cookie_manager.delete("sqm_session_v15"); st.session_state.auth = False; st.rerun()
 
-# --- LOGIKA OBLICZEŃ ---
+# --- CALCULATIONS ---
 w_eff = weight * cfg.get('WAGA_BUFOR', 1.2)
 caps = {"BUS": 1200, "SOLO": 5500, "FTL": 10500}
 results = []
@@ -153,16 +140,11 @@ for v_type, cap in caps.items():
     if not res.empty:
         r = res.mean(numeric_only=True)
         v_count = math.ceil(w_eff / cap)
-        
-        # Pobieranie czasu z Twojej tabeli
         t_key = "BUS" if v_type == "BUS" else "FTL/SOLO"
         transit_days = TRANSIT_DATA.get(target, {}).get(t_key, 2)
         
-        # Stawki rynkowe
         exp = (r['Eksport'] * v_count if mode == "DEDYKOWANY" else r['Eksport'] * (w_eff/cap))
         imp = (r['Import'] * v_count if mode == "DEDYKOWANY" else r['Import'] * (w_eff/cap))
-        
-        # Opłaty stałe
         ata = (cfg.get('ATA_CARNET', 166) if target in ["Londyn", "Genewa", "Liverpool", "Manchester"] else 0)
         ferry = (cfg.get('Ferry_UK', 450) if any(x in target for x in ["Londyn", "Liverpool", "Manchester"]) else 0)
         parking = (days_stay * cfg.get('PARKING_DAY', 30) * v_count)
@@ -174,59 +156,49 @@ for v_type, cap in caps.items():
             "ferry": ferry, "transit": transit_days, "load": min(100, (w_eff/(v_count*cap))*100)
         })
 
-# --- GŁÓWNY DASHBOARD ---
+# --- DISPLAY ---
 if results:
     best = min(results, key=lambda x: x['Total'])
-    st.markdown(f'<div class="route-header">ANALIZA LOGISTYCZNA: KOMORNIKI ➔ {target.upper()}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="route-header">KOMORNIKI ➔ {target.upper()}</div>', unsafe_allow_html=True)
     
     cl, cr = st.columns([1.8, 1])
-    
     with cl:
-        # KARTA KOSZTU GŁÓWNEGO
         st.markdown(f"""
             <div class="hero-card">
                 <div class="main-price-label">Sugerowana Stawka Projektu (Netto)</div>
                 <div class="main-price-value">€ {best['Total']:,.2f}</div>
                 <div class="data-grid">
-                    <div class="data-item"><div class="data-label">Tranzyt (Tabela)</div><div class="data-value">{best['transit']} dni</div></div>
-                    <div class="data-item"><div class="data-label">Czas Montażu</div><div class="data-value">{days_stay} dni</div></div>
-                    <div class="data-item"><div class="data-label">Rekomendacja</div><div class="data-value">{best['Pojazd']}</div></div>
-                    <div class="data-item"><div class="data-label">Ładowne</div><div class="data-value">{best['load']:.0f}%</div></div>
+                    <div class="data-item"><div class="data-label">Tranzyt</div><div class="data-value">{best['transit']} dni</div></div>
+                    <div class="data-item"><div class="data-label">Czas Postoju</div><div class="data-value">{days_stay} dni</div></div>
+                    <div class="data-item"><div class="data-label">Pojazd</div><div class="data-value">{best['Pojazd']}</div></div>
+                    <div class="data-item"><div class="data-label">Zapełnienie</div><div class="data-value">{best['load']:.0f}%</div></div>
                 </div>
             </div>
         """, unsafe_allow_html=True)
         
-        # SKŁADOWE KOSZTÓW
-        st.write("### 📊 SZCZEGÓŁOWE ZESTAWIENIE KOSZTÓW")
+        st.write("### 📊 ZESTAWIENIE KOSZTÓW")
         s1, s2 = st.columns(2)
         with s1:
-            st.markdown(f'<div class="cost-row"><span class="cost-n">Eksport (Średnia rynkowa):</span><span class="cost-v">€ {best["exp"]:,.2f}</span></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="cost-row"><span class="cost-n">Import (Średnia rynkowa):</span><span class="cost-v">€ {best["imp"]:,.2f}</span></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="cost-row"><span class="cost-n">Postój (Dni montażu):</span><span class="cost-v">€ {best["stay"]:,.2f}</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="cost-row"><span class="cost-n">Eksport:</span><span class="cost-v">€ {best["exp"]:,.2f}</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="cost-row"><span class="cost-n">Import:</span><span class="cost-v">€ {best["imp"]:,.2f}</span></div>', unsafe_allow_html=True)
         with s2:
-            st.markdown(f'<div class="cost-row"><span class="cost-n">Parkingi i Diety:</span><span class="cost-v">€ {best["park"]:,.2f}</span></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="cost-row"><span class="cost-n">Odprawa ATA / Cło:</span><span class="cost-v">€ {best["ata"]:,.2f}</span></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="cost-row"><span class="cost-n">Promy / Eurotunel:</span><span class="cost-v">€ {best["ferry"]:,.2f}</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="cost-row"><span class="cost-n">Postój (na miejscu):</span><span class="cost-v">€ {best["stay"]:,.2f}</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="cost-row"><span class="cost-n">Opłaty dodatkowe:</span><span class="cost-v">€ {best["ata"]+best["ferry"]+best["park"]:,.2f}</span></div>', unsafe_allow_html=True)
 
-        # PORÓWNANIE ALTERNATYW
-        st.markdown("<br>### 🚛 DOSTĘPNE OPCJE TRANSPORTU", unsafe_allow_html=True)
+        st.markdown("<br>### 🚛 DOSTĘPNE OPCJE", unsafe_allow_html=True)
         for r in sorted(results, key=lambda x: x['Total']):
             is_best = "alt-best" if r['Pojazd'] == best['Pojazd'] else ""
             st.markdown(f"""
                 <div class="alt-card {is_best}">
-                    <div style="font-weight: 800; font-size: 18px; color: white;">{r['Pojazd']} <span style="font-size: 12px; color: #94a3b8; font-weight: 400;">({r['Szt']} szt. | Wykorzystanie: {r['load']:.0f}%)</span></div>
+                    <div style="font-weight: 800; font-size: 18px; color: white;">{r['Pojazd']} <span style="font-size: 12px; color: #94a3b8; font-weight: 400;">({r['Szt']} szt. | Tranzyt: {r['transit']} d)</span></div>
                     <div style="font-size: 24px; font-weight: 950; color: #ed8936;">€ {r['Total']:,.2f}</div>
                 </div>
             """, unsafe_allow_html=True)
 
     with cr:
-        # MAPA
-        b_pos = CITY_COORDS["Komorniki (Baza)"]
-        d_pos = CITY_COORDS.get(target, [48.8, 2.3])
+        b_pos, d_pos = CITY_COORDS["Komorniki (Baza)"], CITY_COORDS.get(target, [48.8, 2.3])
         path_df = pd.DataFrame({'lat': np.linspace(b_pos[0], d_pos[0], 25), 'lon': np.linspace(b_pos[1], d_pos[1], 25)})
-        
-        st.write("### 📍 TRASA PRZEJAZDU")
+        st.write("### 📍 TRASA")
         st.map(path_df, color='#ed8936', size=15)
-        
-        st.warning(f"Zgodnie z Twoją tabelą, tranzyt dla tego miasta wynosi: **{best['transit']} dni**.")
-        st.info(f"Sugerowana data wyjazdu z Komornik: **{(d_start - timedelta(days=best['transit'])).strftime('%Y-%m-%d')}**")
+        st.success(f"Czas tranzytu: {best['transit']} dni")
+        st.info(f"Wyjazd z bazy: {(d_start - timedelta(days=best['transit'])).strftime('%Y-%m-%d')}")
