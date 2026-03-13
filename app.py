@@ -44,42 +44,16 @@ CITY_COORDS = {
     "Rzym": [41.9028, 12.4964], "Sztokholm": [59.3293, 18.0686]
 }
 
-st.set_page_config(page_title="SQM LOGISTICS v16.1", layout="wide")
+st.set_page_config(page_title="SQM LOGISTICS v16.2", layout="wide")
 
-# --- CSS DLA CZYTELNOŚCI ---
+# --- CSS ---
 st.markdown("""
     <style>
     .stApp { background-color: #05070a !important; }
     [data-testid="stSidebar"] { background-color: #0f172a !important; border-right: 1px solid #1e293b; }
-    
-    /* Naprawa etykiet w sidebarze */
-    [data-testid="stSidebar"] label p {
-        color: #94a3b8 !important;
-        font-size: 0.8rem !important;
-        font-weight: 700 !important;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    /* Nagłówki sekcji w sidebarze */
-    .sidebar-header {
-        color: #ed8936;
-        font-size: 1rem;
-        font-weight: 800;
-        margin: 25px 0 10px 0;
-        padding-bottom: 5px;
-        border-bottom: 1px solid #1e293b;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-
-    /* Wygląd pól Input */
-    div[data-baseweb="input"], div[data-baseweb="select"] {
-        background-color: #1e293b !important;
-        border-radius: 8px !important;
-    }
-
+    [data-testid="stSidebar"] label p { color: #94a3b8 !important; font-size: 0.8rem !important; font-weight: 700 !important; text-transform: uppercase; letter-spacing: 0.5px; }
+    .sidebar-header { color: #ed8936; font-size: 1rem; font-weight: 800; margin: 25px 0 10px 0; padding-bottom: 5px; border-bottom: 1px solid #1e293b; display: flex; align-items: center; gap: 10px; }
+    div[data-baseweb="input"], div[data-baseweb="select"] { background-color: #1e293b !important; border-radius: 8px !important; }
     [data-testid="stSidebarNav"] { display: none; }
     .route-header { font-size: 32px !important; font-weight: 900; color: #ffffff; border-bottom: 3px solid #ed8936; margin-bottom: 25px; padding-bottom: 10px; }
     .hero-card { background: linear-gradient(145deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 20px; padding: 35px; margin-bottom: 30px; }
@@ -97,16 +71,12 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- SYSTEM AUTORYZACJI ---
+# --- SYSTEM AUTORYZACJI (BEZ CACHE DLA COOKIE MANAGER) ---
 def make_hash(p): return hashlib.sha256(p.strip().encode()).hexdigest()
 
-@st.cache_resource
-def get_cookie_manager():
-    return stx.CookieManager()
+# CookieManager musi być zainicjalizowany bez cache
+cookie_manager = stx.CookieManager()
 
-cookie_manager = get_cookie_manager()
-
-# Inicjalizacja stanu sesji
 if "auth" not in st.session_state:
     st.session_state.auth = False
 if "user" not in st.session_state:
@@ -123,14 +93,13 @@ def load_users():
 
 user_db = load_users()
 
-# Sprawdzanie ciasteczka (tylko jeśli nie jesteśmy już zautoryzowani w sesji)
+# Odczyt ciasteczka
 if not st.session_state.auth:
     c_token = cookie_manager.get(cookie="sqm_session_v16")
     if c_token and c_token in user_db:
         st.session_state.auth = True
         st.session_state.user = c_token
 
-# Widok logowania
 if not st.session_state.auth:
     _, col, _ = st.columns([1, 1.2, 1])
     with col:
@@ -142,13 +111,13 @@ if not st.session_state.auth:
                 st.session_state.auth = True
                 st.session_state.user = u_in
                 cookie_manager.set("sqm_session_v16", u_in, expires_at=datetime.now()+timedelta(days=7))
-                time.sleep(0.5) # Czas na zapisanie ciasteczka
+                time.sleep(1) # Ważne: czas dla JS na zapisanie ciasteczka
                 st.rerun()
             else:
                 st.error("Błędne dane logowania")
     st.stop()
 
-# --- POBIERANIE DANYCH LOGISTYCZNYCH ---
+# --- DANE ---
 @st.cache_data(ttl=60)
 def fetch_logs():
     try:
@@ -164,54 +133,46 @@ def fetch_logs():
             if c in b.columns: b[c] = b[c].apply(clean)
         o['Wartosc'] = o['Wartosc'].apply(clean)
         return b, o
-    except Exception as e:
-        st.error(f"Błąd bazy danych: {e}")
+    except:
         return pd.DataFrame(), pd.DataFrame()
 
 df_baza, df_oplaty = fetch_logs()
 cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc'])) if not df_oplaty.empty else {}
 
-# --- SIDEBAR (POPRAWIONA CZYTELNOŚĆ I WYLOGOWYWANIE) ---
+# --- SIDEBAR ---
 with st.sidebar:
     st.markdown("<br>", unsafe_allow_html=True)
     st.image("https://www.sqm.pl/wp-content/themes/sqm/img/logo-sqm.png", width=180)
     
-    # Status operatora
     st.markdown(f"""
         <div style='background: #1e293b; padding: 15px; border-radius: 10px; border-left: 4px solid #ed8936; margin: 20px 0;'>
-            <div style='color: #94a3b8; font-size: 10px; font-weight: 700; text-transform: uppercase;'>Zalogowany jako</div>
+            <div style='color: #94a3b8; font-size: 10px; font-weight: 700; text-transform: uppercase;'>Operator</div>
             <div style='color: #ffffff; font-size: 14px; font-weight: 800;'>{st.session_state.user.upper()}</div>
         </div>
     """, unsafe_allow_html=True)
     
-    # Grupa: Konfiguracja trasy
     st.markdown('<div class="sidebar-header">⚙️ PARAMETRY TRASY</div>', unsafe_allow_html=True)
     mode = st.radio("TRYB KALKULACJI", ["DEDYKOWANY", "DOŁADUNEK"])
     target = st.selectbox("MIASTO DOCELOWE", sorted(TRANSIT_DATA.keys()))
     weight = st.number_input("WAGA ŁADUNKU (KG)", value=1000, step=500, min_value=1)
     
-    # Grupa: Czas
     st.markdown('<div class="sidebar-header">📅 RAMY CZASOWE</div>', unsafe_allow_html=True)
     d_start = st.date_input("DATA ZAŁADUNKU", datetime.now() + timedelta(days=5))
     d_end = st.date_input("DATA POWROTU", datetime.now() + timedelta(days=10))
     days_stay = max(0, (d_end - d_start).days)
     
     st.info(f"Dni na miejscu: {days_stay}")
-
     st.markdown("<br><br>", unsafe_allow_html=True)
     
-    # --- FIX WYLOGOWYWANIA ---
-    if st.button("🚪 WYLOGUJ I WYCZYŚĆ SESJĘ", use_container_width=True):
-        # 1. Usuń ciasteczko
+    # WYLOGOWYWANIE BEZ BŁĘDU CACHE
+    if st.button("🚪 WYLOGUJ MNIE", use_container_width=True):
         cookie_manager.delete("sqm_session_v16")
-        # 2. Wyczyść session_state
         st.session_state.auth = False
         st.session_state.user = None
-        # 3. Krótka pauza i restart
-        time.sleep(0.5)
+        time.sleep(1) # Czas na usunięcie ciasteczka w przeglądarce
         st.rerun()
 
-# --- LOGIKA OBLICZEŃ (BEZ ZMIAN) ---
+# --- OBLICZENIA ---
 w_eff = weight * cfg.get('WAGA_BUFOR', 1.2)
 caps = {"BUS": 1200, "SOLO": 5500, "FTL": 10500}
 results = []
@@ -238,7 +199,7 @@ if not df_baza.empty:
                 "ferry": ferry, "transit": transit_days, "load": min(100, (w_eff/(v_count*cap))*100)
             })
 
-# --- WIDOK GŁÓWNY ---
+# --- WIDOK ---
 if results:
     best = min(results, key=lambda x: x['Total'])
     st.markdown(f'<div class="route-header">KOMORNIKI ➔ {target.upper()}</div>', unsafe_allow_html=True)
@@ -267,7 +228,6 @@ if results:
             st.markdown(f'<div class="cost-row"><span class="cost-n">Dni Postoju ({days_stay}d):</span><span class="cost-v">€ {best["stay"]:,.2f}</span></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="cost-row"><span class="cost-n">Inne (Prom/Ata/Park):</span><span class="cost-v">€ {best["ata"]+best["ferry"]+best["park"]:,.2f}</span></div>', unsafe_allow_html=True)
 
-        st.markdown("<br>### 🚛 PORÓWNANIE TYPÓW TRANSPORTU", unsafe_allow_html=True)
         for r in sorted(results, key=lambda x: x['Total']):
             is_best = "alt-best" if r['Pojazd'] == best['Pojazd'] else ""
             st.markdown(f"""
@@ -284,5 +244,3 @@ if results:
         st.map(path_df, color='#ed8936', size=15)
         st.success(f"**Czas tranzytu:** {best['transit']} dni")
         st.info(f"**Sugerowany wyjazd:** {(d_start - timedelta(days=best['transit'])).strftime('%Y-%m-%d')}")
-else:
-    st.warning("Brak danych w cenniku dla wybranego miasta.")
