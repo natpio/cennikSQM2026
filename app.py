@@ -13,7 +13,7 @@ URL_BAZA = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:c
 URL_OPLATY = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=OPLATY_STALE"
 URL_USERS = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=USERS"
 
-# --- TABELA CZASÓW TRANZYTU ---
+# --- TABELA TRANZYTU ---
 TRANSIT_DATA = {
     "Berlin": {"BUS": 1, "FTL/SOLO": 1}, "Gdańsk": {"BUS": 1, "FTL/SOLO": 1},
     "Hamburg": {"BUS": 1, "FTL/SOLO": 1}, "Hannover": {"BUS": 1, "FTL/SOLO": 1},
@@ -37,66 +37,67 @@ TRANSIT_DATA = {
 CITY_COORDS = {
     "Komorniki (Baza)": [52.3358, 16.8122], "Amsterdam": [52.3702, 4.8952], 
     "Berlin": [52.5200, 13.4050], "Londyn": [51.5074, -0.1276],
-    "Paryż": [48.8566, 2.3522], "Wiedeń": [48.2082, 16.3738], 
-    "Praga": [50.0755, 14.4378], "Genewa": [46.2044, 6.1432], 
-    "Barcelona": [41.3851, 2.1734], "Monachium": [48.1351, 11.5820]
+    "Paryż": [48.8566, 2.3522], "Wiedeń": [48.2082, 16.3738]
 }
 
-st.set_page_config(page_title="SQM LOGISTICS v16.0", layout="wide")
+st.set_page_config(page_title="SQM LOGISTICS v16.1", layout="wide")
 
-# --- ZAAWANSOWANE STYLE CSS (Naprawa widoczności wpisywanego tekstu) ---
+# --- AGRESYWNY CSS DLA SIDEBARU ---
 st.markdown("""
     <style>
+    /* Globalne tło aplikacji */
     .stApp { background-color: #05070a !important; }
-    
-    /* PASEK BOCZNY */
+
+    /* STYLIZACJA SIDEBARU */
     [data-testid="stSidebar"] {
         background-color: #0f172a !important;
         border-right: 1px solid #1e293b;
     }
 
-    /* Wymuszenie białego tekstu dla etykiet */
-    [data-testid="stSidebar"] label, [data-testid="stSidebar"] .stMarkdown p {
+    /* Ukrycie paska wyszukiwania i napisu 'app' na górze */
+    [data-testid="stSidebarNav"] { display: none !important; }
+    header[data-testid="stHeader"] { background: transparent !important; }
+
+    /* WYMUSZENIE KOLORU CZCIONKI DLA WSZYSTKIEGO W SIDEBARZE */
+    [data-testid="stSidebar"] .stMarkdown p, 
+    [data-testid="stSidebar"] label, 
+    [data-testid="stSidebar"] span,
+    [data-testid="stSidebar"] div {
         color: #ffffff !important;
-        font-weight: 600 !important;
     }
 
-    /* NAPRAWA WIDOCZNOŚCI WPISYWANEGO TEKSTU */
+    /* NAPRAWA PÓL INPUT (Białe tło w Twoim screenie -> zmieniamy na ciemne z białym tekstem) */
     [data-testid="stSidebar"] input {
+        background-color: #1e293b !important;
         color: #ffffff !important;
+        border: 1px solid #334155 !important;
         -webkit-text-fill-color: #ffffff !important;
     }
-    
-    /* Naprawa tekstu w selectboxach i polach daty */
-    [data-testid="stSidebar"] div[data-baseweb="select"] *, 
-    [data-testid="stSidebar"] div[data-baseweb="input"] * {
-        color: #ffffff !important;
+
+    /* Fix dla Selectboxa i rozwijanych list */
+    [data-testid="stSidebar"] div[data-baseweb="select"] {
+        background-color: #1e293b !important;
+        border-radius: 4px;
     }
     
-    /* Ukrycie elementów systemowych */
-    [data-testid="stSidebarNav"] { display: none; }
+    [data-testid="stSidebar"] div[role="listbox"] div {
+        background-color: #1e293b !important;
+        color: #ffffff !important;
+    }
 
-    /* UI Główne */
-    .route-header { font-size: 32px !important; font-weight: 900; color: #ffffff; border-bottom: 3px solid #ed8936; margin-bottom: 25px; padding-bottom: 10px; }
+    /* UI GŁÓWNE */
+    .route-header { font-size: 32px !important; font-weight: 900; color: #ffffff; border-bottom: 3px solid #ed8936; margin-bottom: 25px; }
     .hero-card { background: linear-gradient(145deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 20px; padding: 35px; margin-bottom: 30px; }
-    .main-price-label { color: #ed8936; font-size: 14px; font-weight: 800; text-transform: uppercase; }
-    .main-price-value { color: #ffffff; font-size: 85px; font-weight: 950; line-height: 1; margin: 15px 0; }
+    .main-price-value { color: #ffffff; font-size: 85px; font-weight: 950; line-height: 1; }
     
     .data-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 25px; }
     .data-item { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); }
     .data-label { color: #94a3b8; font-size: 10px; font-weight: 700; text-transform: uppercase; }
     .data-value { color: #ffffff; font-size: 22px; font-weight: 900; }
-    
-    .cost-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #1e293b; }
-    .cost-n { color: #cbd5e0; font-size: 14px; }
-    .cost-v { color: #ffffff; font-weight: 700; }
-    
-    .alt-card { background: #0f172a; border-left: 5px solid #475569; padding: 15px 20px; margin-bottom: 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
-    .alt-best { border-left-color: #ed8936; background: rgba(237, 137, 54, 0.1); }
     </style>
 """, unsafe_allow_html=True)
 
-# --- SYSTEM LOGOWANIA ---
+# --- LOGOWANIE ---
 def make_hash(p): return hashlib.sha256(p.strip().encode()).hexdigest()
 cookie_manager = stx.CookieManager()
 
@@ -113,7 +114,7 @@ def load_users():
         return {"admin": "f3e99d9459eeb7ffc4cd407d890fbf1db011208fa12d8edc501a7ec26da106a3"}
 
 user_db = load_users()
-c_token = cookie_manager.get(cookie="sqm_session_v15")
+c_token = cookie_manager.get(cookie="sqm_session_v16")
 if c_token in user_db:
     st.session_state.auth, st.session_state.user = True, c_token
 
@@ -126,11 +127,11 @@ if not st.session_state.auth:
         if st.button("ZALOGUJ", use_container_width=True):
             if u_in in user_db and user_db[u_in] == make_hash(p_in):
                 st.session_state.auth, st.session_state.user = True, u_in
-                cookie_manager.set("sqm_session_v15", u_in, expires_at=datetime.now()+timedelta(days=7))
+                cookie_manager.set("sqm_session_v16", u_in, expires_at=datetime.now()+timedelta(days=7))
                 st.rerun()
     st.stop()
 
-# --- POBIERANIE DANYCH ---
+# --- DANE ---
 @st.cache_data(ttl=60)
 def fetch_logs():
     b = pd.read_csv(URL_BAZA); o = pd.read_csv(URL_OPLATY); b.columns = b.columns.str.strip()
@@ -145,7 +146,7 @@ def fetch_logs():
 df_baza, df_oplaty = fetch_logs()
 cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc']))
 
-# --- SIDEBAR (Z NAPRAWIONĄ WIDOCZNOŚCIĄ TEKSTU) ---
+# --- SIDEBAR ---
 with st.sidebar:
     st.markdown("<br>", unsafe_allow_html=True)
     st.image("https://www.sqm.pl/wp-content/themes/sqm/img/logo-sqm.png", width=180)
@@ -164,11 +165,11 @@ with st.sidebar:
     
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("WYLOGUJ MNIE", use_container_width=True):
-        cookie_manager.delete("sqm_session_v15")
+        cookie_manager.delete("sqm_session_v16")
         st.session_state.auth = False
         st.rerun()
 
-# --- OBLICZENIA ---
+# --- LOGIKA ---
 w_eff = weight * cfg.get('WAGA_BUFOR', 1.2)
 caps = {"BUS": 1200, "SOLO": 5500, "FTL": 10500}
 results = []
@@ -194,7 +195,7 @@ for v_type, cap in caps.items():
             "ferry": ferry, "transit": transit_days, "load": min(100, (w_eff/(v_count*cap))*100)
         })
 
-# --- WIDOK GŁÓWNY ---
+# --- WIDOK ---
 if results:
     best = min(results, key=lambda x: x['Total'])
     st.markdown(f'<div class="route-header">KOMORNIKI ➔ {target.upper()}</div>', unsafe_allow_html=True)
@@ -203,39 +204,20 @@ if results:
     with cl:
         st.markdown(f"""
             <div class="hero-card">
-                <div class="main-price-label">Sugerowana Stawka Projektu (Netto)</div>
+                <div style="color: #ed8936; font-size: 14px; font-weight: 800;">Sugerowana Stawka Projektu (Netto)</div>
                 <div class="main-price-value">€ {best['Total']:,.2f}</div>
                 <div class="data-grid">
                     <div class="data-item"><div class="data-label">Tranzyt</div><div class="data-value">{best['transit']} dni</div></div>
-                    <div class="data-item"><div class="data-label">Czas Postoju</div><div class="data-value">{days_stay} dni</div></div>
                     <div class="data-item"><div class="data-label">Pojazd</div><div class="data-value">{best['Pojazd']}</div></div>
                     <div class="data-item"><div class="data-label">Zapełnienie</div><div class="data-value">{best['load']:.0f}%</div></div>
                 </div>
             </div>
         """, unsafe_allow_html=True)
         
-        st.write("### 📊 SZCZEGÓŁY KOSZTÓW")
-        s1, s2 = st.columns(2)
-        with s1:
-            st.markdown(f'<div class="cost-row"><span class="cost-n">Eksport:</span><span class="cost-v">€ {best["exp"]:,.2f}</span></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="cost-row"><span class="cost-n">Import:</span><span class="cost-v">€ {best["imp"]:,.2f}</span></div>', unsafe_allow_html=True)
-        with s2:
-            st.markdown(f'<div class="cost-row"><span class="cost-n">Czas Postoju:</span><span class="cost-v">€ {best["stay"]:,.2f}</span></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="cost-row"><span class="cost-n">Dodatkowe:</span><span class="cost-v">€ {best["ata"]+best["ferry"]+best["park"]:,.2f}</span></div>', unsafe_allow_html=True)
-
-        st.markdown("<br>### 🚛 DOSTĘPNE OPCJE", unsafe_allow_html=True)
+        st.write("### 📊 PORÓWNANIE OPCJI")
         for r in sorted(results, key=lambda x: x['Total']):
-            is_best = "alt-best" if r['Pojazd'] == best['Pojazd'] else ""
-            st.markdown(f"""
-                <div class="alt-card {is_best}">
-                    <div style="font-weight: 800; color: white;">{r['Pojazd']} <span style="font-weight: 400; font-size: 12px; color: #94a3b8;">({r['Szt']} szt.)</span></div>
-                    <div style="font-size: 20px; font-weight: 900; color: #ed8936;">€ {r['Total']:,.2f}</div>
-                </div>
-            """, unsafe_allow_html=True)
+            st.info(f"**{r['Pojazd']}** ({r['Szt']} szt.) — **€ {r['Total']:,.2f}**")
 
     with cr:
-        b_pos, d_pos = CITY_COORDS["Komorniki (Baza)"], CITY_COORDS.get(target, [48.8, 2.3])
-        path_df = pd.DataFrame({'lat': np.linspace(b_pos[0], d_pos[0], 25), 'lon': np.linspace(b_pos[1], d_pos[1], 25)})
-        st.write("### 📍 TRASA")
-        st.map(path_df, color='#ed8936', size=15)
-        st.success(f"**Tranzyt:** {best['transit']} dni | **Wyjazd:** {(d_start - timedelta(days=best['transit'])).strftime('%Y-%m-%d')}")
+        st.write("### 📍 LOKALIZACJA")
+        st.map(pd.DataFrame({'lat': [52.33, 48.85], 'lon': [16.81, 2.35]}), color='#ed8936')
