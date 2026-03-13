@@ -20,29 +20,28 @@ CITY_COORDS = {
     "Monachium": [48.1351, 11.5820], "Mediolan": [45.4642, 9.1900]
 }
 
-st.set_page_config(page_title="SQM VANTAGE v14.2", layout="wide")
+st.set_page_config(page_title="SQM VANTAGE v14.3", layout="wide")
 
-# --- CSS (Naprawa czytelności tabeli) ---
+# --- CSS (v14.3 - Stabilizacja tabeli) ---
 st.markdown("""
     <style>
     .stApp { background: #0a0e14 !important; }
-    .v14-container { background: rgba(17, 25, 40, 0.95) !important; border: 1px solid rgba(255, 255, 255, 0.1) !important; border-radius: 12px; padding: 25px !important; margin-bottom: 20px; }
-    .v14-price-tag { font-size: 55px !important; font-weight: 800 !important; color: #ed8936 !important; margin: 5px 0; }
-    .v14-stat-box { background: rgba(255, 255, 255, 0.03); padding: 12px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.05); }
+    .v14-container { background: rgba(17, 25, 40, 0.95); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+    .v14-price-tag { font-size: 55px; font-weight: 800; color: #ed8936; margin: 5px 0; }
     .v14-label { color: #94a3b8; font-size: 0.75rem; text-transform: uppercase; font-weight: bold; }
     .v14-value { color: #ffffff; font-size: 1.1rem; font-weight: 600; }
     
-    /* Styl dla tabeli porównawczej */
-    .compare-table { width: 100%; border-collapse: collapse; margin-top: 15px; border-radius: 8px; overflow: hidden; }
-    .compare-table th { background: rgba(237, 137, 54, 0.2); color: #ed8936; padding: 12px; text-align: left; font-size: 0.85rem; border-bottom: 2px solid rgba(237, 137, 54, 0.3); }
-    .compare-table td { padding: 12px; border-top: 1px solid rgba(255,255,255,0.05); color: #e2e8f0; font-size: 0.9rem; background: rgba(255,255,255,0.02); }
-    .best-row { background: rgba(237, 137, 54, 0.15) !important; font-weight: bold; border-left: 4px solid #ed8936; }
+    .compare-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    .compare-table th { background: rgba(237, 137, 54, 0.2); color: #ed8936; padding: 10px; text-align: left; font-size: 0.8rem; }
+    .compare-table td { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); color: #e2e8f0; font-size: 0.85rem; }
+    .best-row { background: rgba(237, 137, 54, 0.15); border-left: 4px solid #ed8936; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
 # --- AUTH ---
 def make_hash(p): return hashlib.sha256(p.strip().encode()).hexdigest()
 cookie_manager = stx.CookieManager()
+if "auth" not in st.session_state: st.session_state.auth = False
 
 @st.cache_data(ttl=5)
 def load_u():
@@ -53,7 +52,6 @@ def load_u():
     except: return {"admin": "f3e99d9459eeb7ffc4cd407d890fbf1db011208fa12d8edc501a7ec26da106a3"}
 
 user_db = load_u()
-if "auth" not in st.session_state: st.session_state.auth = False
 c_token = cookie_manager.get(cookie="sqm_v14_session")
 if c_token in user_db: st.session_state.auth, st.session_state.user = True, c_token
 
@@ -109,6 +107,7 @@ for v_type, cap in caps.items():
     if not res.empty:
         r = res.iloc[0]
         v_count = math.ceil(w_eff / cap)
+        load_pc = min(100, (w_eff / (v_count * cap)) * 100)
         
         if mode == "DEDYKOWANY":
             exp, imp = r['Eksport'] * v_count, r['Import'] * v_count
@@ -119,62 +118,48 @@ for v_type, cap in caps.items():
         stay = r['Postoj'] * days * v_count
         fees = (days * cfg.get('PARKING_DAY', 30) * v_count) + (cfg.get('ATA_CARNET', 166) if target in ["Londyn", "Genewa", "Zurych"] else 0)
         total = exp + imp + stay + fees
-        results.append({"typ": v_type, "total": total, "count": v_count})
+        results.append({"typ": v_type, "total": total, "count": v_count, "load": load_pc})
 
 if results:
     best = min(results, key=lambda x: x['total'])
     
-    # --- UI GŁÓWNE ---
     st.markdown(f"### ANALIZA LOGISTYCZNA: KOMORNIKI ➔ {target.upper()}")
-    c1, c2 = st.columns([1.4, 1])
+    c1, c2 = st.columns([1.5, 1])
     
     with c1:
-        # GŁÓWNA KARTA WYNIKU
+        # Nagłówek wyniku
         st.markdown(f"""
             <div class="v14-container">
-                <div class="v14-label">Sugerowana Stawka Projektu ({mode})</div>
+                <div class="v14-label">Sugerowana Stawka ({mode})</div>
                 <div class="v14-price-tag">€ {best['total']:,.2f}</div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 25px;">
-                    <div class="v14-stat-box"><div class="v14-label">Pojazd</div><div class="v14-value">{best['typ']}</div></div>
-                    <div class="v14-stat-box"><div class="v14-label">Ilość</div><div class="v14-value">{best['count']} szt.</div></div>
-                    <div class="v14-stat-box"><div class="v14-label">Waga +20%</div><div class="v14-value">{w_eff:,.0f} kg</div></div>
+                <div style="display: flex; gap: 20px;">
+                    <div><div class="v14-label">Pojazd</div><div class="v14-value">{best['typ']} ({best['count']} szt.)</div></div>
+                    <div><div class="v14-label">Waga Realna</div><div class="v14-value">{w_eff:,.0f} kg</div></div>
+                    <div><div class="v14-label">Wykorzystanie</div><div class="v14-value">{best['load']:.1f}%</div></div>
                 </div>
-        """, unsafe_allow_html=True)
-
-        # TABELA PORÓWNAWCZA (NAPRAWIONA)
-        rows_html = ""
-        for x in sorted(results, key=lambda x: x['total']):
-            is_best = "best-row" if x['typ'] == best['typ'] else ""
-            diff = f"+ € {x['total'] - best['total']:,.2f}" if x['total'] > best['total'] else "Najtaniej"
-            rows_html += f"""
-                <tr class="{is_best}">
-                    <td>{x['typ']}</td>
-                    <td>{x['count']} szt.</td>
-                    <td>€ {x['total']:,.2f}</td>
-                    <td style="color: {'#ed8936' if diff == 'Najtaniej' else '#94a3b8'}">{diff}</td>
-                </tr>
-            """
-
-        st.markdown(f"""
-                <div class="v14-label" style="margin-top: 10px;">Porównanie alternatyw:</div>
-                <table class="compare-table">
-                    <thead>
-                        <tr><th>Pojazd</th><th>Ilość</th><th>Koszt Total</th><th>Status</th></tr>
-                    </thead>
-                    <tbody>
-                        {rows_html}
-                    </tbody>
-                </table>
             </div>
         """, unsafe_allow_html=True)
 
+        # Osobny blok dla tabeli, żeby uniknąć błędu renderowania
+        rows = ""
+        for x in sorted(results, key=lambda x: x['total']):
+            cls = "best-row" if x['typ'] == best['typ'] else ""
+            status = "Najtaniej" if x['typ'] == best['typ'] else f"+ € {x['total'] - best['total']:,.2f}"
+            rows += f"<tr class='{cls}'><td>{x['typ']}</td><td>{x['count']}</td><td>{x['load']:.0f}%</td><td>€ {x['total']:,.2f}</td><td>{status}</td></tr>"
+
+        table_html = f"""
+        <div class="v14-container">
+            <div class="v14-label" style="margin-bottom:10px;">Alternatywne opcje:</div>
+            <table class="compare-table">
+                <thead><tr><th>Typ</th><th>Szt.</th><th>Ładunek</th><th>Suma</th><th>Różnica</th></tr></thead>
+                <tbody>{rows}</tbody>
+            </table>
+        </div>
+        """
+        st.markdown(table_html, unsafe_allow_html=True)
+
     with c2:
-        # MAPA
         base = CITY_COORDS["Komorniki (Baza)"]
         dest = CITY_COORDS.get(target, [52.5, 13.4])
-        map_data = pd.DataFrame({'lat': [base[0], dest[0]], 'lon': [base[1], dest[1]]})
-        st.map(map_data, color='#ed8936', size=25)
-        st.caption(f"Trasa: Komorniki — {target}")
-
-else:
-    st.error("Brak stawek dla tej trasy.")
+        st.map(pd.DataFrame({'lat': [base[0], dest[0]], 'lon': [base[1], dest[1]]}), color='#ed8936')
+        st.caption(f"Trasa operacyjna: Komorniki — {target}")
