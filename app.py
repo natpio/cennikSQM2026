@@ -44,16 +44,34 @@ CITY_COORDS = {
     "Rzym": [41.9028, 12.4964], "Sztokholm": [59.3293, 18.0686]
 }
 
-st.set_page_config(page_title="SQM LOGISTICS v16.3", layout="wide")
+st.set_page_config(page_title="SQM LOGISTICS v16.4", layout="wide")
 
-# --- CSS ---
+# --- CSS Z POPRAWKĄ WIDOCZNOŚCI DAT ---
 st.markdown("""
     <style>
     .stApp { background-color: #05070a !important; }
     [data-testid="stSidebar"] { background-color: #0f172a !important; border-right: 1px solid #1e293b; }
+    
+    /* Etykiety i nagłówki w sidebarze */
     [data-testid="stSidebar"] label p { color: #94a3b8 !important; font-size: 0.8rem !important; font-weight: 700 !important; text-transform: uppercase; letter-spacing: 0.5px; }
     .sidebar-header { color: #ed8936; font-size: 1rem; font-weight: 800; margin: 25px 0 10px 0; padding-bottom: 5px; border-bottom: 1px solid #1e293b; display: flex; align-items: center; gap: 10px; }
-    div[data-baseweb="input"], div[data-baseweb="select"] { background-color: #1e293b !important; border-radius: 8px !important; }
+
+    /* POPRAWKA CZCIONKI W POLACH DATY I INPUTACH */
+    div[data-baseweb="input"] input {
+        color: #ffffff !important; 
+        -webkit-text-fill-color: #ffffff !important;
+    }
+    
+    div[data-baseweb="select"] > div {
+        color: #ffffff !important;
+    }
+
+    /* Styl tła dla pól input w sidebarze */
+    div[data-baseweb="input"], div[data-baseweb="select"], .stDateInput {
+        background-color: #1e293b !important;
+        border-radius: 8px !important;
+    }
+
     [data-testid="stSidebarNav"] { display: none; }
     .route-header { font-size: 32px !important; font-weight: 900; color: #ffffff; border-bottom: 3px solid #ed8936; margin-bottom: 25px; padding-bottom: 10px; }
     .hero-card { background: linear-gradient(145deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 20px; padding: 35px; margin-bottom: 30px; }
@@ -76,7 +94,6 @@ def make_hash(p): return hashlib.sha256(p.strip().encode()).hexdigest()
 
 cookie_manager = stx.CookieManager()
 
-# Inicjalizacja session_state jeśli nie istnieją
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 if "user_id" not in st.session_state:
@@ -95,8 +112,7 @@ def load_users():
 
 user_db = load_users()
 
-# LOGIKA LOGOWANIA / COOKIES
-# Jeśli nie jesteśmy wylogowani w tej sesji, sprawdź ciasteczko
+# Odczyt ciasteczka
 if not st.session_state.authenticated and not st.session_state.logout_triggered:
     c_token = cookie_manager.get(cookie="sqm_session_v16")
     if c_token and c_token in user_db:
@@ -161,6 +177,7 @@ with st.sidebar:
     weight = st.number_input("WAGA (kg)", value=1000, step=500, min_value=1)
     
     st.markdown('<div class="sidebar-header">📅 TERMINARZ</div>', unsafe_allow_html=True)
+    # Daty z poprawionym stylem czcionki
     d_start = st.date_input("ZAŁADUNEK", datetime.now() + timedelta(days=5))
     d_end = st.date_input("POWRÓT", datetime.now() + timedelta(days=10))
     days_stay = max(0, (d_end - d_start).days)
@@ -168,15 +185,11 @@ with st.sidebar:
     st.info(f"Czas postoju: {days_stay} dni")
     st.markdown("<br><br>", unsafe_allow_html=True)
     
-    # NAPRAWIONY PRZYCISK WYLOGOWYWANIA
     if st.button("🚪 WYLOGUJ MNIE", use_container_width=True):
-        # 1. Ustaw flagę wylogowania, aby zablokować autologowanie z ciasteczka przy rerun
         st.session_state.logout_triggered = True
         st.session_state.authenticated = False
         st.session_state.user_id = None
-        # 2. Usuń ciasteczko
         cookie_manager.delete("sqm_session_v16")
-        # 3. Odczekaj chwilę i przeładuj
         time.sleep(0.8)
         st.rerun()
 
