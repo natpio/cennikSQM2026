@@ -14,7 +14,7 @@ URL_BAZA = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:c
 URL_OPLATY = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=OPLATY_STALE"
 URL_USERS = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=USERS"
 
-# Dane o tranzytach (dni w jedną stronę)
+# Dane o tranzytach (dni drogi w jedną stronę)
 TRANSIT_DATA = {
     "Berlin": {"BUS": 1, "FTL/SOLO": 1}, "Gdańsk": {"BUS": 1, "FTL/SOLO": 1},
     "Hamburg": {"BUS": 1, "FTL/SOLO": 1}, "Hannover": {"BUS": 1, "FTL/SOLO": 1},
@@ -35,7 +35,7 @@ TRANSIT_DATA = {
     "Madryt": {"BUS": 3, "FTL/SOLO": 4}, "Sewilla": {"BUS": 3, "FTL/SOLO": 5}
 }
 
-# Koordynaty do mapy
+# Koordynaty bazowe dla wizualizacji trasy
 CITY_COORDS = {
     "Komorniki (Baza)": [52.3358, 16.8122], "Amsterdam": [52.3702, 4.8952], 
     "Berlin": [52.5200, 13.4050], "Londyn": [51.5074, -0.1276],
@@ -46,9 +46,9 @@ CITY_COORDS = {
     "Rzym": [41.9028, 12.4964], "Sztokholm": [59.3293, 18.0686]
 }
 
-st.set_page_config(page_title="SQM VENTAGE v11.4", layout="wide")
+st.set_page_config(page_title="SQM VENTAGE v11.5", layout="wide")
 
-# --- CSS: INTERFEJS SQM ---
+# --- CSS: STYLIZACJA KORPORACYJNA SQM ---
 st.markdown("""
     <style>
     .stApp { background-color: #05070a !important; }
@@ -70,7 +70,6 @@ st.markdown("""
     .brand-container { padding: 10px 0 20px 0; text-align: center; border-bottom: 1px solid #1e293b; margin-bottom: 20px; }
     .brand-logo { font-family: 'Inter', sans-serif; font-size: 20px; font-weight: 900; color: #ffffff; display: flex; align-items: center; justify-content: center; gap: 10px; }
     .brand-v { background: #ed8936; color: #000; padding: 2px 8px; border-radius: 4px; font-style: italic; }
-    .brand-ver { font-size: 10px; color: #94a3b8 !important; margin-top: 5px; }
     .route-header { font-size: 30px !important; font-weight: 900; color: #ffffff; border-bottom: 3px solid #ed8936; margin-bottom: 25px; padding-bottom: 10px; }
     .hero-card { background: linear-gradient(145deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 20px; padding: 30px; margin-bottom: 30px; }
     .main-price-value { color: #ffffff; font-size: 64px; font-weight: 950; line-height: 1.1; margin: 15px 0; }
@@ -84,7 +83,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- SYSTEM LOGOWANIA ---
+# --- SYSTEM LOGOWANIA Z BLOKADĄ URL ---
 def make_hash(p): 
     return hashlib.sha256(p.strip().encode()).hexdigest()
 
@@ -101,19 +100,26 @@ def load_users():
 
 user_db = load_users()
 
-# Inicjalizacja kluczowych stanów sesji
+# Odczyt parametrów URL
+query_params = st.query_params
+
+# Inicjalizacja stanu sesji
 if "auth" not in st.session_state: st.session_state.auth = False
 if "user" not in st.session_state: st.session_state.user = ""
-if "init_done" not in st.session_state: st.session_state.init_done = False
 
-# --- LOGIKA AUTOLOGOWANIA (SPRAWDZANA TYLKO RAZ PRZY WEJŚCIU) ---
-if not st.session_state.auth and not st.session_state.init_done:
-    token = cookie_manager.get(cookie="sqm_v11_token")
+# --- LOGIKA KRYTYCZNA: DECYZJA O DOSTĘPIE ---
+# Jeśli w adresie URL jest ?logout=true, czyścimy stan i blokujemy autologowanie
+if "logout" in query_params:
+    st.session_state.auth = False
+    st.session_state.user = ""
+
+# Próba autologowania z ciasteczka (tylko jeśli NIE jesteśmy w trybie logout)
+if not st.session_state.auth and "logout" not in query_params:
+    token = cookie_manager.get(cookie="sqm_v15_token")
     if token and token in user_db:
         st.session_state.auth = True
         st.session_state.user = token
         st.rerun()
-    st.session_state.init_done = True
 
 # Ekran Logowania
 if not st.session_state.auth:
@@ -122,12 +128,14 @@ if not st.session_state.auth:
         st.markdown("<h2 style='text-align:center; color:white; margin-top:50px;'>SQM VENTAGE</h2>", unsafe_allow_html=True)
         u_in = st.text_input("Użytkownik", key="login_u").strip()
         p_in = st.text_input("Hasło", type="password", key="login_p").strip()
+        
         if st.button("ZALOGUJ", use_container_width=True):
             if u_in in user_db and user_db[u_in] == make_hash(p_in):
                 st.session_state.auth = True
                 st.session_state.user = u_in
-                st.session_state.init_done = True
-                cookie_manager.set("sqm_v11_token", u_in, expires_at=datetime.now()+timedelta(days=7))
+                # Przy logowaniu czyścimy parametry URL (usuwamy ?logout=true)
+                st.query_params.clear()
+                cookie_manager.set("sqm_v15_token", u_in, expires_at=datetime.now()+timedelta(days=7))
                 st.rerun()
             else:
                 st.error("Nieprawidłowy login lub hasło.")
@@ -153,19 +161,19 @@ def fetch_data():
 df_baza, df_oplaty = fetch_data()
 cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc'])) if not df_oplaty.empty else {}
 
-# --- SIDEBAR ---
+# --- SIDEBAR: KONFIGURACJA PROJEKTU ---
 with st.sidebar:
-    st.markdown('<div class="brand-container"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div><div class="brand-ver">SYSTEM LOGISTYCZNY VER. 11.4</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="brand-container"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div></div>', unsafe_allow_html=True)
     st.markdown(f"👤 Zalogowany: **{st.session_state.user}**")
     
-    st.markdown("### 🚛 PARAMETRY")
+    st.markdown("### 🚛 PARAMETRY TRANSPORTU")
     trip_type = st.radio("KIERUNEK", ["PEŁNA TRASA (EXP+IMP)", "TYLKO DOSTAWA (ONE-WAY)"])
     mode = st.radio("STRATEGIA", ["DEDYKOWANY", "DOŁADUNEK"])
     target = st.selectbox("CEL PODRÓŻY", sorted(TRANSIT_DATA.keys()))
     
     base_weight = st.number_input("WAGA PROJEKTU GŁÓWNEGO (KG)", value=1000, step=100)
     real_weight = base_weight * 1.20 
-    st.markdown(f'<div class="weight-info">WAGA PROJEKTU + AKCESORIA: {real_weight:,.0f} KG</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="weight-info">WAGA + AKCESORIA: {real_weight:,.0f} KG</div>', unsafe_allow_html=True)
     
     st.markdown("### 📅 TERMINARZ")
     d_start = st.date_input("PIERWSZY DZIEŃ MONTAŻU", datetime.now() + timedelta(days=7))
@@ -176,22 +184,19 @@ with st.sidebar:
 
     st.markdown("---")
     
-    # --- PANCERNE WYLOGOWANIE ---
+    # --- LOGIKA WYLOGOWANIA (LOCK NA URL) ---
     if st.button("🚪 WYLOGUJ", use_container_width=True):
         # 1. Kasujemy ciasteczko
-        cookie_manager.delete("sqm_v11_token")
-        
-        # 2. Resetujemy session_state całkowicie
+        cookie_manager.delete("sqm_v15_token")
+        # 2. Czyścimy stan lokalny
         st.session_state.auth = False
         st.session_state.user = ""
-        st.session_state.init_done = True # Blokada ponownego autologowania w tej sesji
-        
-        # 3. Krótka pauza i restart
-        with st.spinner("Wylogowywanie..."):
-            time.sleep(0.8)
+        # 3. Dodajemy blokadę do URL
+        st.query_params.logout = "true"
+        # 4. Restart
         st.rerun()
 
-# --- LOGIKA OBLICZEŃ ---
+# --- LOGIKA OBLICZEŃ LOGISTYCZNYCH ---
 caps = {"BUS": 1200, "SOLO": 5500, "FTL": 10500}
 results = []
 
@@ -222,7 +227,7 @@ if not df_baza.empty:
                 "stay": stay_v, "fees": ata + ferry + park
             })
 
-# --- WIDOK GŁÓWNY ---
+# --- PANEL GŁÓWNY (DASHBOARD) ---
 if results:
     best = min(results, key=lambda x: x['Total'])
     suggested_departure = d_start - timedelta(days=best['transit'] + 1)
@@ -240,36 +245,36 @@ if results:
                 <div class="breakdown-container">
                     <div class="breakdown-item">Eksport: <b>€ {best['exp']:,.0f}</b></div>
                     {imp_val_html}
-                    <div class="breakdown-item">Postój (montaż): <b>€ {best['stay']:,.0f}</b></div>
-                    <div class="breakdown-item">Opłaty dodatkowe: <b>€ {best['fees']:,.0f}</b></div>
+                    <div class="breakdown-item">Postój: <b>€ {best['stay']:,.0f}</b></div>
+                    <div class="breakdown-item">Dodatki: <b>€ {best['fees']:,.0f}</b></div>
                 </div>
                 <div style='display:grid; grid-template-columns: repeat(4, 1fr); gap:15px;'>
                     <div style='background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; text-align:center;'>
-                        <div style='color:#94a3b8; font-size:10px; font-weight:700;'>TRANZYT</div>
+                        <div style='color:#94a3b8; font-size:10px;'>TRANZYT</div>
                         <div style='color:white; font-size:20px; font-weight:900;'>{best['transit']} dni</div>
                     </div>
                     <div style='background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; text-align:center;'>
-                        <div style='color:#94a3b8; font-size:10px; font-weight:700;'>TARGI</div>
+                        <div style='color:#94a3b8; font-size:10px;'>TARGI</div>
                         <div style='color:white; font-size:20px; font-weight:900;'>{days_stay} dni</div>
                     </div>
                     <div style='background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; text-align:center;'>
-                        <div style='color:#94a3b8; font-size:10px; font-weight:700;'>AUTO</div>
+                        <div style='color:#94a3b8; font-size:10px;'>AUTO</div>
                         <div style='color:white; font-size:20px; font-weight:900;'>{best['Pojazd']}</div>
                     </div>
                     <div style='background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; text-align:center;'>
-                        <div style='color:#94a3b8; font-size:10px; font-weight:700;'>ŁADUNEK</div>
+                        <div style='color:#94a3b8; font-size:10px;'>ŁADUNEK</div>
                         <div style='color:white; font-size:20px; font-weight:900;'>{best['load']:.0f}%</div>
                     </div>
                 </div>
             </div>
         """, unsafe_allow_html=True)
         
-        st.markdown("### 📊 ANALIZA PORÓWNAWCZA")
+        st.markdown("### 📊 OPCJE ALTERNATYWNE")
         for r in sorted(results, key=lambda x: x['Total']):
             is_best_class = "alt-best" if r['Pojazd'] == best['Pojazd'] else ""
             st.markdown(f"""
                 <div class="alt-card {is_best_class}">
-                    <div style='color:white;'><b>{r['Pojazd']}</b> <small style='color:#94a3b8; margin-left:10px;'>({r['Szt']} szt. | Ładunek {r['load']:.0f}%)</small></div>
+                    <div style='color:white;'><b>{r['Pojazd']}</b> <small style='color:#94a3b8; margin-left:10px;'>({r['Szt']} szt. | Załadunek {r['load']:.0f}%)</small></div>
                     <div class="price-tag">€ {r['Total']:,.2f}</div>
                 </div>
             """, unsafe_allow_html=True)
@@ -278,7 +283,6 @@ if results:
         b_pos, d_pos = CITY_COORDS["Komorniki (Baza)"], CITY_COORDS.get(target, [48.8, 2.3])
         map_df = pd.DataFrame({'lat': np.linspace(b_pos[0], d_pos[0], 25), 'lon': np.linspace(b_pos[1], d_pos[1], 25)})
         st.map(map_df, color='#ed8936', size=15)
-        st.warning(f"🚚 **SUGEROWANA DATA WYJAZDU: {suggested_departure.strftime('%Y-%m-%d')}**")
-        st.info(f"Logika: {best['transit']} dni drogi + 1 dzień zapasu przed montażem ({d_start}).")
+        st.warning(f"🚚 **WYJAZD Z BAZY: {suggested_departure.strftime('%Y-%m-%d')}**")
 else:
-    st.error("Brak dostępnych stawek w bazie danych.")
+    st.error("Brak stawek w bazie Google Sheets dla wybranej konfiguracji.")
