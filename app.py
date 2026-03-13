@@ -6,6 +6,7 @@ import hashlib
 import extra_streamlit_components as stx
 import math
 import numpy as np
+import time
 
 # --- KONFIGURACJA ZASOBÓW ---
 SHEET_ID = "1sYlXP6WVzPE09qfmydQYQNsjiZcDgRSJGyWoXfjmkDY"
@@ -43,7 +44,7 @@ CITY_COORDS = {
     "Rzym": [41.9028, 12.4964], "Sztokholm": [59.3293, 18.0686]
 }
 
-st.set_page_config(page_title="SQM VENTAGE v11.2", layout="wide")
+st.set_page_config(page_title="SQM VENTAGE v11.3", layout="wide")
 
 # --- CSS: PEŁNY STYL SQM ---
 st.markdown("""
@@ -84,7 +85,6 @@ st.markdown("""
 # --- SYSTEM LOGOWANIA ---
 def make_hash(p): return hashlib.sha256(p.strip().encode()).hexdigest()
 
-# Inicjalizacja managera ciasteczek
 cookie_manager = stx.CookieManager()
 
 @st.cache_data(ttl=10)
@@ -98,17 +98,18 @@ def load_users():
 
 user_db = load_users()
 
+# Inicjalizacja stanu sesji
 if "auth" not in st.session_state: st.session_state.auth = False
 if "user" not in st.session_state: st.session_state.user = ""
+if "logout_in_progress" not in st.session_state: st.session_state.logout_in_progress = False
 
-# LOGIKA OBSŁUGI CIASTECZEK
-# Musimy dać skryptowi szansę na pobranie ciasteczek, które Streamlit przesyła z opóźnieniem
-cookies = cookie_manager.get_all()
-token = cookies.get("sqm_v11_token")
-
-if token in user_db and not st.session_state.auth:
-    st.session_state.auth = True
-    st.session_state.user = token
+# --- LOGIKA AUTOLOGOWANIA (Z BLOKADĄ WYLOGOWANIA) ---
+if not st.session_state.auth and not st.session_state.logout_in_progress:
+    token = cookie_manager.get(cookie="sqm_v11_token")
+    if token and token in user_db:
+        st.session_state.auth = True
+        st.session_state.user = token
+        st.rerun()
 
 # Ekran Logowania
 if not st.session_state.auth:
@@ -121,7 +122,7 @@ if not st.session_state.auth:
             if u_in in user_db and user_db[u_in] == make_hash(p_in):
                 st.session_state.auth = True
                 st.session_state.user = u_in
-                # Ustawiamy ciasteczko
+                st.session_state.logout_in_progress = False 
                 cookie_manager.set("sqm_v11_token", u_in, expires_at=datetime.now()+timedelta(days=7))
                 st.rerun()
             else:
@@ -146,7 +147,7 @@ cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc'])) if not df_oplaty.em
 
 # --- SIDEBAR (PARAMETRY I WYLOGOWANIE) ---
 with st.sidebar:
-    st.markdown('<div class="brand-container"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div><div class="brand-ver">SYSTEM LOGISTYCZNY VER. 11.2</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="brand-container"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div><div class="brand-ver">SYSTEM LOGISTYCZNY VER. 11.3</div></div>', unsafe_allow_html=True)
     st.markdown(f"👤 Zalogowany: **{st.session_state.user}**")
     
     st.markdown("### 🚛 PARAMETRY")
@@ -167,18 +168,17 @@ with st.sidebar:
 
     st.markdown("---")
     
-    # --- FIX WYLOGOWANIA v11.2 ---
-    if st.button("🚪 WYLOGUJ", use_container_width=True, key="logout_btn"):
-        # 1. Usuwamy ciasteczko
+    # --- POPRAWIONA LOGIKA WYLOGOWANIA ---
+    if st.button("🚪 WYLOGUJ", use_container_width=True):
+        st.session_state.logout_in_progress = True
         cookie_manager.delete("sqm_v11_token")
-        # 2. Czyścimy sesję
         st.session_state.auth = False
         st.session_state.user = ""
-        # 3. Zamiast samego rerun, dajemy Streamlitowi znać, że ma wyczyścić wszystko
-        st.cache_data.clear()
+        with st.spinner("Wylogowywanie..."):
+            time.sleep(0.6) # Czas dla przeglądarki na wyczyszczenie ciasteczka
         st.rerun()
 
-# --- LOGIKA OBLICZEŃ ---
+# --- LOGIKA OBLICZEŃ LOGISTYCZNYCH ---
 caps = {"BUS": 1200, "SOLO": 5500, "FTL": 10500}
 results = []
 
@@ -209,14 +209,17 @@ if not df_baza.empty:
                 "stay": stay_v, "fees": ata + ferry + park
             })
 
-# --- WIDOK GŁÓWNY ---
+# --- WIDOK GŁÓWNY (DASHBOARD) ---
 if results:
     best = min(results, key=lambda x: x['Total'])
     suggested_departure = d_start - timedelta(days=best['transit'] + 1)
+    
     st.markdown(f'<div class="route-header">KOMORNIKI ➔ {target.upper()}</div>', unsafe_allow_html=True)
+    
     cl, cr = st.columns([1.8, 1])
     with cl:
         imp_val_html = f'<div class="breakdown-item">Import: <b>€ {best["imp"]:,.0f}</b></div>' if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else ""
+        
         st.markdown(f"""
             <div class="hero-card">
                 <div style='color:#ed8936; font-size:14px; font-weight:800;'>KOSZT SZACUNKOWY NETTO</div>
@@ -247,6 +250,7 @@ if results:
                 </div>
             </div>
         """, unsafe_allow_html=True)
+        
         st.markdown("### 📊 ANALIZA PORÓWNAWCZA")
         for r in sorted(results, key=lambda x: x['Total']):
             is_best_class = "alt-best" if r['Pojazd'] == best['Pojazd'] else ""
@@ -256,11 +260,16 @@ if results:
                     <div class="price-tag">€ {r['Total']:,.2f}</div>
                 </div>
             """, unsafe_allow_html=True)
+
     with cr:
         b_pos, d_pos = CITY_COORDS["Komorniki (Baza)"], CITY_COORDS.get(target, [48.8, 2.3])
-        map_df = pd.DataFrame({'lat': np.linspace(b_pos[0], d_pos[0], 25), 'lon': np.linspace(b_pos[1], d_pos[1], 25)})
+        map_df = pd.DataFrame({
+            'lat': np.linspace(b_pos[0], d_pos[0], 25), 
+            'lon': np.linspace(b_pos[1], d_pos[1], 25)
+        })
         st.map(map_df, color='#ed8936', size=15)
+        
         st.warning(f"🚚 **SUGEROWANA DATA WYJAZDU: {suggested_departure.strftime('%Y-%m-%d')}**")
         st.info(f"Logika: {best['transit']} dni drogi + 1 dzień zapasu przed montażem ({d_start}).")
 else:
-    st.error("Brak dostępnych stawek w bazie.")
+    st.error("Brak dostępnych stawek dla wybranej konfiguracji w bazie Google Sheets.")
