@@ -43,15 +43,15 @@ CITY_COORDS = {
     "Rzym": [41.9028, 12.4964], "Sztokholm": [59.3293, 18.0686]
 }
 
-st.set_page_config(page_title="SQM VENTAGE v5.0.8", layout="wide")
+st.set_page_config(page_title="SQM VENTAGE v11.1", layout="wide")
 
-# --- CSS Z FIXEM DLA SIDEBARA ---
+# --- CSS Z FIXAMI DLA sidebara I BIAŁYCH PÓŁ ---
 st.markdown("""
     <style>
     .stApp { background-color: #05070a !important; }
     [data-testid="stSidebar"] { background-color: #0f172a !important; border-right: 1px solid #1e293b; }
 
-    /* Fix dla pól wprowadzania danych */
+    /* Fix dla białych pól wprowadzania danych */
     div[data-baseweb="select"] > div, 
     div[data-baseweb="input"] > div,
     .stNumberInput div[data-baseweb="input"],
@@ -66,7 +66,6 @@ st.markdown("""
         -webkit-text-fill-color: #ffffff !important;
     }
 
-    /* Wyświetlanie wagi przeliczonej */
     .weight-info {
         background: rgba(237, 137, 54, 0.1);
         border: 1px solid #ed8936;
@@ -101,10 +100,11 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- SYSTEM LOGOWANIA ---
+# --- SYSTEM LOGOWANIA (v11 Integracja) ---
 def make_hash(p): return hashlib.sha256(p.strip().encode()).hexdigest()
+cookie_manager = stx.CookieManager()
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=10)
 def load_users():
     try:
         df = pd.read_csv(URL_USERS)
@@ -113,26 +113,33 @@ def load_users():
     except:
         return {"admin": "f3e99d9459eeb7ffc4cd407d890fbf1db011208fa12d8edc501a7ec26da106a3"}
 
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
+user_db = load_users()
+if "user" not in st.session_state: st.session_state.user = ""
+if "auth" not in st.session_state: st.session_state.auth = False
 
-if not st.session_state.authenticated:
+# Sprawdzenie ciasteczka
+token = cookie_manager.get(cookie="sqm_v11_token")
+if token in user_db and not st.session_state.auth:
+    st.session_state.auth = True
+    st.session_state.user = token
+
+if not st.session_state.auth:
     _, col, _ = st.columns([1, 1.2, 1])
     with col:
         st.markdown("<h2 style='text-align:center; color:white; margin-top:50px;'>SQM VENTAGE</h2>", unsafe_allow_html=True)
-        u_in = st.text_input("Użytkownik", key="login_user")
-        p_in = st.text_input("Hasło", type="password", key="login_pass")
+        u_in = st.text_input("Użytkownik", key="login_u").strip()
+        p_in = st.text_input("Hasło", type="password", key="login_p").strip()
         if st.button("ZALOGUJ", use_container_width=True):
-            users = load_users()
-            if u_in in users and users[u_in] == make_hash(p_in):
-                st.session_state.authenticated = True
-                st.session_state.current_user = u_in
+            if u_in in user_db and user_db[u_in] == make_hash(p_in):
+                st.session_state.auth = True
+                st.session_state.user = u_in
+                cookie_manager.set("sqm_v11_token", u_in, expires_at=datetime.now()+timedelta(days=7))
                 st.rerun()
             else:
                 st.error("Błędne dane logowania")
     st.stop()
 
-# --- DANE ---
+# --- POBIERANIE DANYCH ---
 @st.cache_data(ttl=60)
 def fetch_data():
     try:
@@ -150,29 +157,32 @@ cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc'])) if not df_oplaty.em
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.markdown('<div class="brand-container"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div><div class="brand-ver">SYSTEM LOGISTYCZNY VER. 5.0.8</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="brand-container"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div><div class="brand-ver">SYSTEM LOGISTYCZNY VER. 11.1</div></div>', unsafe_allow_html=True)
+    st.markdown(f"👤 Zalogowany: **{st.session_state.user}**")
     
     st.markdown("### 🚛 PARAMETRY")
     trip_type = st.radio("KIERUNEK", ["PEŁNA TRASA (EXP+IMP)", "TYLKO DOSTAWA (ONE-WAY)"])
     mode = st.radio("STRATEGIA", ["DEDYKOWANY", "DOŁADUNEK"])
     target = st.selectbox("CEL PODRÓŻY", sorted(TRANSIT_DATA.keys()))
     
-    # NOWA LOGIKA WAGI
-    base_weight = st.number_input("WAGA PROJEKTU GŁÓWNEGO", value=1000, step=100)
-    real_weight = base_weight * 1.20 # Doliczenie 20%
+    base_weight = st.number_input("WAGA PROJEKTU GŁÓWNEGO (KG)", value=1000, step=100)
+    real_weight = base_weight * 1.20 # Doliczenie 20% bufora
     st.markdown(f'<div class="weight-info">WAGA PROJEKTU + AKCESORIA: {real_weight:,.0f} KG</div>', unsafe_allow_html=True)
     
     st.markdown("### 📅 TERMINARZ")
-    d_start = st.date_input("PIERWSZY DZIEŃ MONTAŻU", datetime.now() + timedelta(days=5))
+    d_start = st.date_input("PIERWSZY DZIEŃ MONTAŻU", datetime.now() + timedelta(days=7))
     days_stay = 0
     if trip_type == "PEŁNA TRASA (EXP+IMP)":
         d_end = st.date_input("OSTATNI DZIEŃ DEMONTAŻU", d_start + timedelta(days=5))
         days_stay = max(0, (d_end - d_start).days)
 
     if st.button("🚪 WYLOGUJ", use_container_width=True):
-        st.session_state.authenticated = False; st.rerun()
+        cookie_manager.delete("sqm_v11_token")
+        st.session_state.auth = False
+        st.session_state.user = ""
+        st.rerun()
 
-# --- OBLICZENIA NA PODSTAWIE WAGI REALNEJ ---
+# --- OBLICZENIA ---
 caps = {"BUS": 1200, "SOLO": 5500, "FTL": 10500}
 results = []
 
@@ -181,7 +191,7 @@ if not df_baza.empty:
         res = df_baza[(df_baza['Miasto'] == target) & (df_baza['Typ_Pojazdu'] == v_type)]
         if not res.empty:
             r = res.mean(numeric_only=True)
-            v_count = math.ceil(real_weight / cap) # Użycie wagi z akcesoriami
+            v_count = math.ceil(real_weight / cap)
             transit = TRANSIT_DATA.get(target, {}).get("BUS" if v_type=="BUS" else "FTL/SOLO", 2)
             
             exp_v = (r['Eksport'] * v_count if mode == "DEDYKOWANY" else r['Eksport'] * (real_weight/cap))
@@ -239,7 +249,7 @@ if results:
                     </div>
                 </div>
             </div>
-        """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True) # Parametr kluczowy do poprawnego wyświetlania HTML
         
         st.markdown("### 📊 ANALIZA PORÓWNAWCZA")
         for r in sorted(results, key=lambda x: x['Total']):
@@ -256,3 +266,5 @@ if results:
         st.map(pd.DataFrame({'lat': np.linspace(b_pos[0], d_pos[0], 25), 'lon': np.linspace(b_pos[1], d_pos[1], 25)}), color='#ed8936', size=15)
         st.warning(f"🚚 **SUGEROWANA DATA WYJAZDU: {suggested_departure.strftime('%Y-%m-%d')}**")
         st.info(f"Wyliczenie: {best['transit']} dni drogi + 1 dzień zapasu przed montażem ({d_start}).")
+else:
+    st.error("Brak stawek w bazie dla wybranej trasy.")
