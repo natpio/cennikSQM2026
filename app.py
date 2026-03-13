@@ -44,7 +44,7 @@ CITY_COORDS = {
     "Rzym": [41.9028, 12.4964], "Sztokholm": [59.3293, 18.0686]
 }
 
-st.set_page_config(page_title="SQM VENTAGE v5.0.2", layout="wide")
+st.set_page_config(page_title="SQM VENTAGE v5.0.3", layout="wide")
 
 # --- CSS Z AKTUALIZACJĄ KOLORÓW I ETYKIET ---
 st.markdown("""
@@ -79,7 +79,7 @@ st.markdown("""
     }
     .brand-ver {
         font-size: 10px;
-        color: #ffffff !important; /* Zmiana na biały */
+        color: #ffffff !important;
         margin-top: 5px;
         font-weight: 600;
         opacity: 0.9;
@@ -100,7 +100,6 @@ st.markdown("""
     }
     [data-testid="stSidebar"] label p { color: #94a3b8 !important; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; }
     
-    /* Zmiana koloru nagłówków H3 w Sidebarze na biały (np. PARAMETRY) */
     [data-testid="stSidebar"] h3 {
         color: #ffffff !important;
         font-size: 1.1rem !important;
@@ -108,8 +107,25 @@ st.markdown("""
 
     /* UI Components */
     .route-header { font-size: 32px !important; font-weight: 900; color: #ffffff; border-bottom: 3px solid #ed8936; margin-bottom: 25px; padding-bottom: 10px; }
-    .hero-card { background: linear-gradient(145deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 20px; padding: 35px; margin-bottom: 30px; }
-    .main-price-value { color: #ffffff; font-size: 85px; font-weight: 950; line-height: 1; margin: 15px 0; }
+    .hero-card { background: linear-gradient(145deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 20px; padding: 30px; margin-bottom: 30px; }
+    .main-price-value { color: #ffffff; font-size: 70px; font-weight: 950; line-height: 1; margin: 10px 0; }
+
+    /* Breakdown Styles */
+    .breakdown-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px solid rgba(255,255,255,0.1);
+    }
+    .breakdown-item {
+        font-size: 13px;
+        color: #94a3b8;
+    }
+    .breakdown-item b {
+        color: #ffffff;
+    }
 
     .alt-card { 
         background: #0f172a; 
@@ -159,7 +175,7 @@ if not st.session_state.authenticated:
                 st.rerun()
     st.stop()
 
-# --- POBIERANIE DANYCH ---
+# --- DANE ---
 @st.cache_data(ttl=60)
 def fetch_logs():
     try:
@@ -176,12 +192,12 @@ def fetch_logs():
 df_baza, df_oplaty = fetch_logs()
 cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc'])) if not df_oplaty.empty else {}
 
-# --- SIDEBAR VENTAGE ---
+# --- SIDEBAR ---
 with st.sidebar:
     st.markdown("""
         <div class="brand-container">
             <div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div>
-            <div class="brand-ver">SYSTEM LOGISTYCZNY VER. 5.0.1</div>
+            <div class="brand-ver">SYSTEM LOGISTYCZNY VER. 5.0.3</div>
         </div>
     """, unsafe_allow_html=True)
     
@@ -219,16 +235,22 @@ if not df_baza.empty:
             r = res.mean(numeric_only=True); v_count = math.ceil(w_eff / cap)
             transit_days = TRANSIT_DATA.get(target, {}).get("BUS" if v_type=="BUS" else "FTL/SOLO", 2)
             
-            exp = (r['Eksport'] * v_count if mode == "DEDYKOWANY" else r['Eksport'] * (w_eff/cap))
-            imp = (r['Import'] * v_count if mode == "DEDYKOWANY" else r['Import'] * (w_eff/cap)) if trip_type == "PEŁNA TRASA (EXP+IMP)" else 0
+            # Składniki kosztów
+            exp_val = (r['Eksport'] * v_count if mode == "DEDYKOWANY" else r['Eksport'] * (w_eff/cap))
+            imp_val = (r['Import'] * v_count if mode == "DEDYKOWANY" else r['Import'] * (w_eff/cap)) if trip_type == "PEŁNA TRASA (EXP+IMP)" else 0
             
-            ata = (cfg.get('ATA_CARNET', 166) if target in ["Londyn", "Genewa", "Liverpool", "Manchester"] else 0)
-            ferry = (cfg.get('Ferry_UK', 450) if any(x in target for x in ["Londyn", "Liverpool", "Manchester"]) else 0)
-            park = (days_stay * cfg.get('PARKING_DAY', 30) * v_count)
-            stay = r['Postoj'] * days_stay * v_count
+            ata_val = (cfg.get('ATA_CARNET', 166) if target in ["Londyn", "Genewa", "Liverpool", "Manchester"] else 0)
+            ferry_val = (cfg.get('Ferry_UK', 450) if any(x in target for x in ["Londyn", "Liverpool", "Manchester"]) else 0)
+            park_val = (days_stay * cfg.get('PARKING_DAY', 30) * v_count)
+            stay_val = r['Postoj'] * days_stay * v_count
             
-            total = exp + imp + stay + park + ata + ferry
-            results.append({"Pojazd": v_type, "Szt": v_count, "Total": total, "transit": transit_days, "load": min(100, (w_eff/(v_count*cap))*100)})
+            total = exp_val + imp_val + stay_val + park_val + ata_val + ferry_val
+            
+            results.append({
+                "Pojazd": v_type, "Szt": v_count, "Total": total, 
+                "transit": transit_days, "load": min(100, (w_eff/(v_count*cap))*100),
+                "exp": exp_val, "imp": imp_val, "stay": stay_val, "fees": ata_val + ferry_val + park_val
+            })
 
 # --- WIDOK GŁÓWNY ---
 if results:
@@ -236,16 +258,32 @@ if results:
     st.markdown(f'<div class="route-header">KOMORNIKI ➔ {target.upper()} <small style="font-size:14px; color:#94a3b8;">({trip_type})</small></div>', unsafe_allow_html=True)
     cl, cr = st.columns([1.8, 1])
     with cl:
-        st.markdown(f"""<div class="hero-card"><div style='color:#ed8936;font-size:14px;font-weight:800;'>KOSZT SZACUNKOWY NETTO</div><div class="main-price-value">€ {best['Total']:,.2f}</div>
-                    <div style='display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-top:25px;'>
+        # Główna karta z rozbiciem kosztów
+        st.markdown(f"""
+            <div class="hero-card">
+                <div style='color:#ed8936;font-size:14px;font-weight:800;'>KOSZT SZACUNKOWY NETTO</div>
+                <div class="main-price-value">€ {best['Total']:,.2f}</div>
+                
+                <div class="breakdown-container">
+                    <div class="breakdown-item">Eksport: <b>€ {best['exp']:,.0f}</b></div>
+                    {f'<div class="breakdown-item">Import: <b>€ {best["imp"]:,.0f}</b></div>' if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else ""}
+                    <div class="breakdown-item">Postój na evencie: <b>€ {best['stay']:,.0f}</b></div>
+                    <div class="breakdown-item">Opłaty dodatkowe: <b>€ {best['fees']:,.0f}</b></div>
+                </div>
+
+                <div style='display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-top:25px;'>
                     <div style='background:rgba(255,255,255,0.05);padding:15px;border-radius:10px;'><div style='color:#94a3b8;font-size:10px;font-weight:700;'>TRANZYT</div><div style='color:white;font-size:22px;font-weight:900;'>{best['transit']} dni</div></div>
                     <div style='background:rgba(255,255,255,0.05);padding:15px;border-radius:10px;'><div style='color:#94a3b8;font-size:10px;font-weight:700;'>DNI NA TARGACH</div><div style='color:white;font-size:22px;font-weight:900;'>{days_stay}d</div></div>
                     <div style='background:rgba(255,255,255,0.05);padding:15px;border-radius:10px;'><div style='color:#94a3b8;font-size:10px;font-weight:700;'>OPCJA</div><div style='color:white;font-size:22px;font-weight:900;'>{best['Pojazd']}</div></div>
-                    <div style='background:rgba(255,255,255,0.05);padding:15px;border-radius:10px;'><div style='color:#94a3b8;font-size:10px;font-weight:700;'>ZAPEŁNIENIE</div><div style='color:white;font-size:22px;font-weight:900;'>{best['load']:.0f}%</div></div></div></div>""", unsafe_allow_html=True)
-        st.write("### 🚛 ANALIZA KOSZTÓW POJAZDÓW")
+                    <div style='background:rgba(255,255,255,0.05);padding:15px;border-radius:10px;'><div style='color:#94a3b8;font-size:10px;font-weight:700;'>ZAPEŁNIENIE</div><div style='color:white;font-size:22px;font-weight:900;'>{best['load']:.0f}%</div></div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        st.write("### 🚛 PORÓWNANIE POJAZDÓW")
         for r in sorted(results, key=lambda x: x['Total']):
             is_best = "alt-best" if r['Pojazd'] == best['Pojazd'] else ""
-            st.markdown(f"""<div class="alt-card {is_best}"><div><b>{r['Pojazd']}</b> <small>({r['Szt']} szt. | Załadunek {r['load']:.0f}%)</small></div><div class="price-tag">€ {r['Total']:,.2f}</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div class="alt-card {is_best}"><div><b>{r['Pojazd']}</b> <small>({r['Szt']} szt. | Ładunek {r['load']:.0f}%)</small></div><div class="price-tag">€ {r['Total']:,.2f}</div></div>""", unsafe_allow_html=True)
     with cr:
         b_pos, d_pos = CITY_COORDS["Komorniki (Baza)"], CITY_COORDS.get(target, [48.8, 2.3])
         st.map(pd.DataFrame({'lat': np.linspace(b_pos[0], d_pos[0], 25), 'lon': np.linspace(b_pos[1], d_pos[1], 25)}), color='#ed8936', size=15)
