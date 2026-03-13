@@ -44,7 +44,7 @@ CITY_COORDS = {
     "Rzym": [41.9028, 12.4964], "Sztokholm": [59.3293, 18.0686]
 }
 
-st.set_page_config(page_title="SQM LOGISTICS v16.2", layout="wide")
+st.set_page_config(page_title="SQM LOGISTICS v16.3", layout="wide")
 
 # --- CSS ---
 st.markdown("""
@@ -71,16 +71,18 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- SYSTEM AUTORYZACJI (BEZ CACHE DLA COOKIE MANAGER) ---
+# --- SYSTEM AUTORYZACJI ---
 def make_hash(p): return hashlib.sha256(p.strip().encode()).hexdigest()
 
-# CookieManager musi być zainicjalizowany bez cache
 cookie_manager = stx.CookieManager()
 
-if "auth" not in st.session_state:
-    st.session_state.auth = False
-if "user" not in st.session_state:
-    st.session_state.user = None
+# Inicjalizacja session_state jeśli nie istnieją
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+if "user_id" not in st.session_state:
+    st.session_state.user_id = None
+if "logout_triggered" not in st.session_state:
+    st.session_state.logout_triggered = False
 
 @st.cache_data(ttl=30)
 def load_users():
@@ -93,36 +95,38 @@ def load_users():
 
 user_db = load_users()
 
-# Odczyt ciasteczka
-if not st.session_state.auth:
+# LOGIKA LOGOWANIA / COOKIES
+# Jeśli nie jesteśmy wylogowani w tej sesji, sprawdź ciasteczko
+if not st.session_state.authenticated and not st.session_state.logout_triggered:
     c_token = cookie_manager.get(cookie="sqm_session_v16")
     if c_token and c_token in user_db:
-        st.session_state.auth = True
-        st.session_state.user = c_token
+        st.session_state.authenticated = True
+        st.session_state.user_id = c_token
 
-if not st.session_state.auth:
+# EKRAN LOGOWANIA
+if not st.session_state.authenticated:
     _, col, _ = st.columns([1, 1.2, 1])
     with col:
         st.markdown("<h2 style='text-align:center; color:white; margin-top:50px;'>SQM LOGISTICS</h2>", unsafe_allow_html=True)
-        u_in = st.text_input("Użytkownik", key="login_u")
-        p_in = st.text_input("Hasło", type="password", key="login_p")
-        if st.button("ZALOGUJ SYSTEM", use_container_width=True):
+        u_in = st.text_input("Użytkownik", key="log_u")
+        p_in = st.text_input("Hasło", type="password", key="log_p")
+        if st.button("ZALOGUJ", use_container_width=True):
             if u_in in user_db and user_db[u_in] == make_hash(p_in):
-                st.session_state.auth = True
-                st.session_state.user = u_in
+                st.session_state.authenticated = True
+                st.session_state.user_id = u_in
+                st.session_state.logout_triggered = False
                 cookie_manager.set("sqm_session_v16", u_in, expires_at=datetime.now()+timedelta(days=7))
-                time.sleep(1) # Ważne: czas dla JS na zapisanie ciasteczka
+                time.sleep(1)
                 st.rerun()
             else:
-                st.error("Błędne dane logowania")
+                st.error("Błędne dane")
     st.stop()
 
-# --- DANE ---
+# --- POBIERANIE DANYCH ---
 @st.cache_data(ttl=60)
 def fetch_logs():
     try:
-        b = pd.read_csv(URL_BAZA)
-        o = pd.read_csv(URL_OPLATY)
+        b = pd.read_csv(URL_BAZA); o = pd.read_csv(URL_OPLATY)
         b.columns = b.columns.str.strip()
         if 'Dostawca' in b.columns:
             b = b[~b['Dostawca'].str.contains('SQM|Własny|Wlasny', case=False, na=False)]
@@ -147,29 +151,33 @@ with st.sidebar:
     st.markdown(f"""
         <div style='background: #1e293b; padding: 15px; border-radius: 10px; border-left: 4px solid #ed8936; margin: 20px 0;'>
             <div style='color: #94a3b8; font-size: 10px; font-weight: 700; text-transform: uppercase;'>Operator</div>
-            <div style='color: #ffffff; font-size: 14px; font-weight: 800;'>{st.session_state.user.upper()}</div>
+            <div style='color: #ffffff; font-size: 14px; font-weight: 800;'>{st.session_state.user_id.upper() if st.session_state.user_id else ""}</div>
         </div>
     """, unsafe_allow_html=True)
     
-    st.markdown('<div class="sidebar-header">⚙️ PARAMETRY TRASY</div>', unsafe_allow_html=True)
-    mode = st.radio("TRYB KALKULACJI", ["DEDYKOWANY", "DOŁADUNEK"])
-    target = st.selectbox("MIASTO DOCELOWE", sorted(TRANSIT_DATA.keys()))
-    weight = st.number_input("WAGA ŁADUNKU (KG)", value=1000, step=500, min_value=1)
+    st.markdown('<div class="sidebar-header">⚙️ KONFIGURACJA</div>', unsafe_allow_html=True)
+    mode = st.radio("STRATEGIA", ["DEDYKOWANY", "DOŁADUNEK"])
+    target = st.selectbox("CEL PODRÓŻY", sorted(TRANSIT_DATA.keys()))
+    weight = st.number_input("WAGA (kg)", value=1000, step=500, min_value=1)
     
-    st.markdown('<div class="sidebar-header">📅 RAMY CZASOWE</div>', unsafe_allow_html=True)
-    d_start = st.date_input("DATA ZAŁADUNKU", datetime.now() + timedelta(days=5))
-    d_end = st.date_input("DATA POWROTU", datetime.now() + timedelta(days=10))
+    st.markdown('<div class="sidebar-header">📅 TERMINARZ</div>', unsafe_allow_html=True)
+    d_start = st.date_input("ZAŁADUNEK", datetime.now() + timedelta(days=5))
+    d_end = st.date_input("POWRÓT", datetime.now() + timedelta(days=10))
     days_stay = max(0, (d_end - d_start).days)
     
-    st.info(f"Dni na miejscu: {days_stay}")
+    st.info(f"Czas postoju: {days_stay} dni")
     st.markdown("<br><br>", unsafe_allow_html=True)
     
-    # WYLOGOWYWANIE BEZ BŁĘDU CACHE
+    # NAPRAWIONY PRZYCISK WYLOGOWYWANIA
     if st.button("🚪 WYLOGUJ MNIE", use_container_width=True):
+        # 1. Ustaw flagę wylogowania, aby zablokować autologowanie z ciasteczka przy rerun
+        st.session_state.logout_triggered = True
+        st.session_state.authenticated = False
+        st.session_state.user_id = None
+        # 2. Usuń ciasteczko
         cookie_manager.delete("sqm_session_v16")
-        st.session_state.auth = False
-        st.session_state.user = None
-        time.sleep(1) # Czas na usunięcie ciasteczka w przeglądarce
+        # 3. Odczekaj chwilę i przeładuj
+        time.sleep(0.8)
         st.rerun()
 
 # --- OBLICZENIA ---
@@ -199,7 +207,7 @@ if not df_baza.empty:
                 "ferry": ferry, "transit": transit_days, "load": min(100, (w_eff/(v_count*cap))*100)
             })
 
-# --- WIDOK ---
+# --- WIDOK GŁÓWNY ---
 if results:
     best = min(results, key=lambda x: x['Total'])
     st.markdown(f'<div class="route-header">KOMORNIKI ➔ {target.upper()}</div>', unsafe_allow_html=True)
@@ -228,6 +236,7 @@ if results:
             st.markdown(f'<div class="cost-row"><span class="cost-n">Dni Postoju ({days_stay}d):</span><span class="cost-v">€ {best["stay"]:,.2f}</span></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="cost-row"><span class="cost-n">Inne (Prom/Ata/Park):</span><span class="cost-v">€ {best["ata"]+best["ferry"]+best["park"]:,.2f}</span></div>', unsafe_allow_html=True)
 
+        st.markdown("<br>### 🚛 DOSTĘPNE OPCJE", unsafe_allow_html=True)
         for r in sorted(results, key=lambda x: x['Total']):
             is_best = "alt-best" if r['Pojazd'] == best['Pojazd'] else ""
             st.markdown(f"""
@@ -242,5 +251,5 @@ if results:
         path_df = pd.DataFrame({'lat': np.linspace(b_pos[0], d_pos[0], 25), 'lon': np.linspace(b_pos[1], d_pos[1], 25)})
         st.write("### 📍 TRASA")
         st.map(path_df, color='#ed8936', size=15)
-        st.success(f"**Czas tranzytu:** {best['transit']} dni")
-        st.info(f"**Sugerowany wyjazd:** {(d_start - timedelta(days=best['transit'])).strftime('%Y-%m-%d')}")
+        st.success(f"**Tranzyt:** {best['transit']} dni")
+        st.info(f"**Wyjazd:** {(d_start - timedelta(days=best['transit'])).strftime('%Y-%m-%d')}")
