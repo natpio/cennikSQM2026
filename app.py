@@ -88,9 +88,6 @@ st.markdown("""
     
     .alt-card { background: #0f172a; border-left: 5px solid #475569; padding: 15px 20px; margin-bottom: 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
     .alt-best { border-left-color: #ed8936; background: rgba(237, 137, 54, 0.1); }
-    
-    /* Style dla Admin Tool */
-    .admin-box { background: #1e293b; padding: 20px; border-radius: 10px; border: 1px solid #ed8936; margin-bottom: 20px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -146,7 +143,7 @@ def fetch_logs():
 df_baza, df_oplaty = fetch_logs()
 cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc']))
 
-# --- SIDEBAR (Z NAWIGACJĄ) ---
+# --- SIDEBAR ---
 with st.sidebar:
     st.markdown("<br>", unsafe_allow_html=True)
     st.image("https://www.sqm.pl/wp-content/themes/sqm/img/logo-sqm.png", width=180)
@@ -175,23 +172,19 @@ with st.sidebar:
         st.session_state.auth = False
         st.rerun()
 
-# --- LOGIKA STRON ---
+# --- LOGIKA MODUŁÓW ---
 if st.session_state.page == "ADMIN TOOL":
-    st.markdown('<div class="route-header">ADMIN TOOL - KONFIGURACJA SYSTEMU</div>', unsafe_allow_html=True)
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.write("### ⚙️ OPŁATY STAŁE I WSPÓŁCZYNNIKI")
+    st.markdown('<div class="route-header">ADMIN TOOL</div>', unsafe_allow_html=True)
+    c1, c2 = st.columns(2)
+    with c1:
+        st.write("### ⚙️ OPŁATY STAŁE")
         st.data_editor(df_oplaty, use_container_width=True, hide_index=True)
-        st.info("Zmiany w opłatach stałych wpływają na Karnet ATA, Promy oraz Parkingi.")
-        
-    with col2:
-        st.write("### 🚛 BAZA STAWEK TRANSPORTOWYCH")
+    with c2:
+        st.write("### 🚛 BAZA STAWEK")
         st.data_editor(df_baza, use_container_width=True, hide_index=True)
-        st.warning("Edytujesz dane pobrane z Google Sheets. Zmiany są widoczne tylko w tej sesji (read-only). Aby zapisać na stałe, edytuj arkusz źródłowy.")
 
 else:
-    # --- CALCULATIONS (KALKULATOR) ---
+    # --- CALCULATIONS ---
     w_eff = weight * cfg.get('WAGA_BUFOR', 1.2)
     caps = {"BUS": 1200, "SOLO": 5500, "FTL": 10500}
     results = []
@@ -217,7 +210,6 @@ else:
                 "ferry": ferry, "transit": transit_days, "load": min(100, (w_eff/(v_count*cap))*100)
             })
 
-    # --- MAIN VIEW ---
     if results:
         best = min(results, key=lambda x: x['Total'])
         st.markdown(f'<div class="route-header">KOMORNIKI ➔ {target.upper()}</div>', unsafe_allow_html=True)
@@ -230,7 +222,7 @@ else:
                     <div class="main-price-value">€ {best['Total']:,.2f}</div>
                     <div class="data-grid">
                         <div class="data-item"><div class="data-label">Tranzyt</div><div class="data-value">{best['transit']} dni</div></div>
-                        <div class="data-item"><div class="data-label">Czas Postoju</div><div class="data-value">{days_stay} dni</div></div>
+                        <div class="data-item"><div class="data-label">Postój</div><div class="data-value">{days_stay} dni</div></div>
                         <div class="data-item"><div class="data-label">Pojazd</div><div class="data-value">{best['Pojazd']}</div></div>
                         <div class="data-item"><div class="data-label">Zapełnienie</div><div class="data-value">{best['load']:.0f}%</div></div>
                     </div>
@@ -240,25 +232,25 @@ else:
             st.write("### 📊 SZCZEGÓŁY KOSZTÓW")
             s1, s2 = st.columns(2)
             with s1:
-                st.markdown(f'<div class="cost-row"><span class="cost-n">Eksport:</span><span class="cost-v">€ {best["exp"]:,.2f}</span></div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="cost-row"><span class="cost-n">Import:</span><span class="cost-v">€ {best["imp"]:,.2f}</span></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="cost-row"><span>Eksport:</span><span class="cost-v">€ {best["exp"]:,.2f}</span></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="cost-row"><span>Import:</span><span class="cost-v">€ {best["imp"]:,.2f}</span></div>', unsafe_allow_html=True)
             with s2:
-                st.markdown(f'<div class="cost-row"><span class="cost-n">Czas Postoju:</span><span class="cost-v">€ {best["stay"]:,.2f}</span></div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="cost-row"><span class="cost-n">Dodatkowe:</span><span class="cost-v">€ {best["ata"]+best["ferry"]+best["park"]:,.2f}</span></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="cost-row"><span>Czas Postoju:</span><span class="cost-v">€ {best["stay"]:,.2f}</span></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="cost-row"><span>Dodatkowe:</span><span class="cost-v">€ {best["ata"]+best["ferry"]+best["park"]:,.2f}</span></div>', unsafe_allow_html=True)
 
-            st.markdown("<br>### 🚛 DOSTĘPNE OPCJE TRANSPORTU", unsafe_allow_html=True)
+            st.markdown("<br>### 🚛 DOSTĘPNE OPCJE", unsafe_allow_html=True)
             for r in sorted(results, key=lambda x: x['Total']):
                 is_best = "alt-best" if r['Pojazd'] == best['Pojazd'] else ""
                 st.markdown(f"""
                     <div class="alt-card {is_best}">
-                        <div style="font-weight: 800; color: white;">{r['Pojazd']} <span style="font-weight: 400; font-size: 12px; color: #94a3b8;">({r['Szt']} szt. | Załadunek {r['load']:.0f}%)</span></div>
+                        <div style="font-weight: 800; color: white;">{r['Pojazd']} ({r['Szt']} szt.)</div>
                         <div style="font-size: 20px; font-weight: 900; color: #ed8936;">€ {r['Total']:,.2f}</div>
                     </div>
                 """, unsafe_allow_html=True)
 
         with cr:
             b_pos, d_pos = CITY_COORDS["Komorniki (Baza)"], CITY_COORDS.get(target, [48.8, 2.3])
-            path_df = pd.DataFrame({'lat': np.linspace(b_pos[0], d_pos[0], 25), 'lon': np.linspace(b_p[1], d_p[1], 25)})
+            path_df = pd.DataFrame({'lat': np.linspace(b_pos[0], d_pos[0], 25), 'lon': np.linspace(b_pos[1], d_pos[1], 25)})
             st.write("### 📍 TRASA")
             st.map(path_df, color='#ed8936', size=15)
             st.success(f"**Czas tranzytu:** {best['transit']} dni")
