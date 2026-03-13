@@ -7,13 +7,13 @@ import extra_streamlit_components as stx
 import math
 import numpy as np
 
-# --- CONFIG & DATA ---
+# --- KONFIGURACJA ARKUSZY ---
 SHEET_ID = "1sYlXP6WVzPE09qfmydQYQNsjiZcDgRSJGyWoXfjmkDY"
 URL_BAZA = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=CENNIK_BAZA"
 URL_OPLATY = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=OPLATY_STALE"
 URL_USERS = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=USERS"
 
-# TWOJA TABELA CZASÓW (image_bd2e11.png)
+# --- TWOJA TABELA CZASÓW TRANZYTU (image_bd2e11.png) ---
 TRANSIT_DATA = {
     "Berlin": {"BUS": 1, "FTL/SOLO": 1}, "Gdańsk": {"BUS": 1, "FTL/SOLO": 1},
     "Hamburg": {"BUS": 1, "FTL/SOLO": 1}, "Hannover": {"BUS": 1, "FTL/SOLO": 1},
@@ -39,59 +39,74 @@ CITY_COORDS = {
     "Berlin": [52.5200, 13.4050], "Londyn": [51.5074, -0.1276],
     "Paryż": [48.8566, 2.3522], "Wiedeń": [48.2082, 16.3738], 
     "Praga": [50.0755, 14.4378], "Genewa": [46.2044, 6.1432], 
-    "Zurych": [47.3769, 8.5417], "Barcelona": [41.3851, 2.1734],
-    "Monachium": [48.1351, 11.5820], "Mediolan": [45.4642, 9.1900],
+    "Barcelona": [41.3851, 2.1734], "Monachium": [48.1351, 11.5820], 
     "Madryt": [40.4168, -3.7038], "Lizbona": [38.7223, -9.1393],
     "Rzym": [41.9028, 12.4964], "Sztokholm": [59.3293, 18.0686]
 }
 
-st.set_page_config(page_title="SQM LOGISTICS v15.2", layout="wide")
+st.set_page_config(page_title="SQM LOGISTICS v15.3", layout="wide")
 
-# --- CSS ---
+# --- UI STYLING ( image_c81a25.jpg & image_be163c.jpg ) ---
 st.markdown("""
     <style>
     .stApp { background-color: #05070a !important; }
-    .route-header { font-size: 38px !important; font-weight: 900; color: #ffffff; border-bottom: 5px solid #ed8936; margin-bottom: 25px; }
-    .hero-card { background: linear-gradient(145deg, #0f172a, #1e293b); border: 2px solid #334155; border-radius: 20px; padding: 35px; }
-    .main-price-value { color: #ffffff; font-size: 100px; font-weight: 950; line-height: 0.85; margin: 20px 0; }
-    .data-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 25px; }
-    .data-item { background: rgba(255,255,255,0.08); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); }
-    .data-label { color: #94a3b8; font-size: 11px; font-weight: 700; text-transform: uppercase; }
-    .data-value { color: #ffffff; font-size: 24px; font-weight: 900; }
-    .cost-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #1e293b; font-size: 15px; }
-    .cost-n { color: #94a3b8; }
-    .cost-v { color: #ffffff; font-weight: 700; }
+    .route-header { font-size: 38px !important; font-weight: 900; color: #ffffff; border-bottom: 5px solid #ed8936; margin-bottom: 25px; text-transform: uppercase; }
+    
+    .hero-card { 
+        background: linear-gradient(145deg, #0a0f1a, #161e2e); 
+        border: 1px solid #2d3748; border-radius: 16px; padding: 30px; 
+    }
+    
+    .main-price-label { color: #ed8936; font-size: 14px; font-weight: 800; letter-spacing: 1.5px; margin-bottom: 10px; }
+    .main-price-value { color: #ffffff; font-size: 90px; font-weight: 950; line-height: 0.9; margin: 15px 0; }
+    
+    .data-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 20px; }
+    .data-item { background: rgba(255,255,255,0.05); padding: 18px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); }
+    .data-label { color: #718096; font-size: 10px; font-weight: 700; text-transform: uppercase; margin-bottom: 5px; }
+    .data-value { color: #ffffff; font-size: 20px; font-weight: 800; }
+    
+    .cost-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #1e293b; }
+    .cost-n { color: #a0aec0; font-size: 14px; }
+    .cost-v { color: #ffffff; font-weight: 700; font-size: 16px; }
+    
+    .alt-card { 
+        background: #0f172a; border-left: 6px solid #4a5568; padding: 15px 20px; 
+        margin-bottom: 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; 
+    }
+    .alt-best { border-left-color: #ed8936; background: rgba(237, 137, 54, 0.08); }
     </style>
 """, unsafe_allow_html=True)
 
-# --- AUTH & DATA LOADING ---
+# --- FUNKCJE POMOCNICZE ---
 def make_hash(p): return hashlib.sha256(p.strip().encode()).hexdigest()
-cookie_manager = stx.CookieManager()
 
 @st.cache_data(ttl=60)
-def fetch_logs():
+def fetch_data():
     b = pd.read_csv(URL_BAZA); o = pd.read_csv(URL_OPLATY); b.columns = b.columns.str.strip()
-    if 'Dostawca' in b.columns: b = b[~b['Dostawca'].str.contains('SQM|Własny|Wlasny', case=False, na=False)]
+    # Wykluczenie SQM / Własny ( image_be19fc.jpg )
+    if 'Dostawca' in b.columns:
+        b = b[~b['Dostawca'].str.contains('SQM|Własny|Wlasny', case=False, na=False)]
     def clean(v):
         s = re.sub(r'[^\d.]', '', str(v).replace(',', '.')); return float(s) if s else 0.0
     for c in ['Eksport', 'Import', 'Postoj']: b[c] = b[c].apply(clean)
     o['Wartosc'] = o['Wartosc'].apply(clean)
     return b, o
 
-df_baza, df_oplaty = fetch_logs()
+df_baza, df_oplaty = fetch_data()
 cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc']))
 
-# --- SIDEBAR ---
+# --- SIDEBAR ( image_be078e.png ) ---
 with st.sidebar:
-    st.image("https://www.sqm.pl/wp-content/themes/sqm/img/logo-sqm.png", width=120)
+    st.image("https://www.sqm.pl/wp-content/themes/sqm/img/logo-sqm.png", width=140)
+    st.markdown("---")
     mode = st.radio("STRATEGIA", ["DEDYKOWANY", "DOŁADUNEK"])
-    target = st.selectbox("MIASTO DOCELOWE", sorted(TRANSIT_DATA.keys()))
-    weight = st.number_input("WAGA SPRZĘTU (kg)", value=1500, step=500)
-    d_start = st.date_input("PIERWSZY DZIEŃ MONTAŻU", datetime.now() + timedelta(days=7))
-    d_end = st.date_input("OSTATNI DZIEŃ MONTAŻU", datetime.now() + timedelta(days=10))
+    target = st.selectbox("CEL", sorted(TRANSIT_DATA.keys()))
+    weight = st.number_input("WAGA SPRZĘTU (kg)", value=1000, step=500)
+    d_start = st.date_input("ZAŁADUNEK", datetime.now() + timedelta(days=5))
+    d_end = st.date_input("POWRÓT", datetime.now() + timedelta(days=10))
     days_stay = max(0, (d_end - d_start).days)
 
-# --- CALCULATIONS ---
+# --- LOGIKA OBLICZEŃ ---
 w_eff = weight * cfg.get('WAGA_BUFOR', 1.2)
 caps = {"BUS": 1200, "SOLO": 5500, "FTL": 10500}
 results = []
@@ -102,55 +117,77 @@ for v_type, cap in caps.items():
         r = res.mean(numeric_only=True)
         v_count = math.ceil(w_eff / cap)
         
-        # POBIERANIE CZASU Z TWOJEJ TABELI
+        # CZASY Z TABELI ( image_bd2e11.png )
         t_key = "BUS" if v_type == "BUS" else "FTL/SOLO"
         transit_days = TRANSIT_DATA.get(target, {}).get(t_key, 2)
         
         exp = (r['Eksport'] * v_count if mode == "DEDYKOWANY" else r['Eksport'] * (w_eff/cap))
         imp = (r['Import'] * v_count if mode == "DEDYKOWANY" else r['Import'] * (w_eff/cap))
-        ata = (cfg.get('ATA_CARNET', 166) if target in ["Londyn", "Genewa", "Zurych", "Liverpool", "Manchester"] else 0)
-        ferry = (cfg.get('Ferry_UK', 450) if target in ["Londyn", "Liverpool", "Manchester"] else 0)
+        
+        # OPŁATY DODATKOWE
+        ata = (cfg.get('ATA_CARNET', 166) if target in ["Londyn", "Genewa", "Liverpool", "Manchester"] else 0)
+        ferry = (cfg.get('Ferry_UK', 450) if "Londyn" in target or "Liverpool" in target or "Manchester" in target else 0)
         parking = (days_stay * cfg.get('PARKING_DAY', 30) * v_count)
         stay_cost = r['Postoj'] * days_stay * v_count
         
+        total = exp + imp + stay_cost + parking + ata + ferry
         results.append({
-            "Pojazd": v_type, "Szt": v_count, "Total": exp+imp+stay_cost+parking+ata+ferry, 
-            "exp": exp, "imp": imp, "stay": stay_cost, "park": parking, "ata": ata, 
-            "ferry": ferry, "transit": transit_days, "load": min(100, (w_eff/(v_count*cap))*100)
+            "Pojazd": v_type, "Szt": v_count, "Total": total, "exp": exp, "imp": imp, 
+            "stay": stay_cost, "park": parking, "ata": ata, "ferry": ferry, 
+            "transit": transit_days, "load": min(100, (w_eff/(v_count*cap))*100)
         })
 
+# --- WYŚWIETLANIE ---
 if results:
     best = min(results, key=lambda x: x['Total'])
-    st.markdown(f'<div class="route-header">LOGISTYKA: KOMORNIKI ➔ {target.upper()}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="route-header">KOMORNIKI ➔ {target}</div>', unsafe_allow_html=True)
     
-    cl, cr = st.columns([1.8, 1])
-    with cl:
+    col_main, col_map = st.columns([1.8, 1])
+    
+    with col_main:
+        # KARTA GŁÓWNA ( image_c88b1f.jpg )
         st.markdown(f"""
             <div class="hero-card">
+                <div class="main-price-label">Sugerowana Stawka Projektu (Netto)</div>
                 <div class="main-price-value">€ {best['Total']:,.2f}</div>
                 <div class="data-grid">
                     <div class="data-item"><div class="data-label">Tranzyt (Tabela)</div><div class="data-value">{best['transit']} dni</div></div>
-                    <div class="data-item"><div class="data-label">Dni na miejscu</div><div class="data-value">{days_stay} dni</div></div>
+                    <div class="data-item"><div class="data-label">Dni Postoju</div><div class="data-value">{days_stay} dni</div></div>
                     <div class="data-item"><div class="data-label">Pojazd</div><div class="data-value">{best['Pojazd']}</div></div>
-                    <div class="data-item"><div class="data-label">Auta</div><div class="data-value">{best['Szt']} szt.</div></div>
+                    <div class="data-item"><div class="data-label">Wykorzystanie</div><div class="data-value">{best['load']:.0f}%</div></div>
                 </div>
             </div>
         """, unsafe_allow_html=True)
         
-        st.write("### 📊 SZCZEGÓŁY KOSZTÓW:")
+        # SZCZEGÓŁY ( image_bda656.jpg )
+        st.write("### 📋 SZCZEGÓŁOWE ZESTAWIENIE")
         s1, s2 = st.columns(2)
         with s1:
-            st.markdown(f'<div class="cost-row"><span class="cost-n">Eksport:</span><span class="cost-v">€ {best["exp"]:,.2f}</span></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="cost-row"><span class="cost-n">Import:</span><span class="cost-v">€ {best["imp"]:,.2f}</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="cost-row"><span class="cost-n">Eksport (Netto):</span><span class="cost-v">€ {best["exp"]:,.2f}</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="cost-row"><span class="cost-n">Import (Netto):</span><span class="cost-v">€ {best["imp"]:,.2f}</span></div>', unsafe_allow_html=True)
         with s2:
             st.markdown(f'<div class="cost-row"><span class="cost-n">Postój (Montaż):</span><span class="cost-v">€ {best["stay"]:,.2f}</span></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="cost-row"><span class="cost-n">Opłaty (ATA/Ferry/Park):</span><span class="cost-v">€ {best["ata"]+best["ferry"]+best["park"]:,.2f}</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="cost-row"><span class="cost-n">Opłaty (ATA/Prom):</span><span class="cost-v">€ {best["ata"]+best["ferry"]+best["park"]:,.2f}</span></div>', unsafe_allow_html=True)
 
-    with cr:
+        # ALTERNATYWY ( image_be163c.jpg )
+        st.write("### 🚛 PORÓWNANIE OPCJI")
+        for r in sorted(results, key=lambda x: x['Total']):
+            is_best = "alt-best" if r['Pojazd'] == best['Pojazd'] else ""
+            st.markdown(f"""
+                <div class="alt-card {is_best}">
+                    <div style="font-weight: 800; color: white;">{r['Pojazd']} <span style="font-size: 12px; color: #718096; font-weight: 400;">({r['Szt']} szt. | Tranzyt: {r['transit']} d)</span></div>
+                    <div style="font-size: 22px; font-weight: 900; color: #ed8936;">€ {r['Total']:,.2f}</div>
+                </div>
+            """, unsafe_allow_html=True)
+
+    with col_map:
+        # MAPA ( image_be1e58.jpg )
         b_pos = CITY_COORDS["Komorniki (Baza)"]
-        d_pos = CITY_COORDS.get(target, [48.8, 2.3])
-        path_df = pd.DataFrame({'lat': np.linspace(b_pos[0], d_pos[0], 20), 'lon': np.linspace(b_pos[1], d_pos[1], 20)})
-        st.write("### 📍 TRASA")
-        st.map(path_df, color='#ed8936', size=15)
+        d_pos = CITY_COORDS.get(target, [48.8, 2.3]) # Default Paryż jeśli brak współrzędnych
+        path_df = pd.DataFrame({'lat': np.linspace(b_pos[0], d_pos[0], 25), 'lon': np.linspace(b_pos[1], d_pos[1], 25)})
         
-        st.info(f"Rekomendacja: Załadunek w Komornikach min. **{best['transit']} dni** przed montażem.")
+        st.write("### 📍 TRASA PRZEJAZDU")
+        st.map(path_df, color='#ed8936', size=20)
+        
+        st.warning(f"Zalecany wyjazd z Komornik: **{best['transit']} dni** przed montażem.")
+        st.info("Pamiętaj o zarezerwowaniu slotu rozładunkowego.")
