@@ -22,47 +22,50 @@ CITY_GEO = {
     "Genewa": [6.1432, 46.2044], "Zurych": [8.5417, 47.3769], "Barcelona": [2.1734, 41.3851]
 }
 
-st.set_page_config(page_title="SQM VANTAGE v10", layout="wide")
+st.set_page_config(page_title="SQM VANTAGE v11.0", layout="wide")
 
-# --- CSS: MAKSYMALNA CZYTELNOŚĆ ---
+# --- CSS: TOTALNY RESET WIZUALNY ---
+# Używamy nowych klas (np. .v11-box), aby wymusić odświeżenie stylów
 st.markdown("""
     <style>
+    /* Wymuszenie tła */
     .stApp {
-        background: radial-gradient(circle at 20% 20%, #1e3a8a 0%, #030508 100%) !important;
-    }
-    /* Półprzezroczysta maska na całe tło dla czytelności */
-    .stApp::after {
-        content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.3); z-index: -2;
-    }
-
-    .main-card {
-        background: rgba(0, 0, 0, 0.7) !important;
-        border: 1px solid rgba(255, 255, 255, 0.15) !important;
-        border-radius: 20px;
-        padding: 40px !important;
-        box-shadow: 0 15px 35px rgba(0,0,0,0.8);
-    }
-
-    .stat-val { font-size: 85px !important; font-weight: 900 !important; color: #ffffff !important; line-height: 1; }
-    .orange-tag { color: #ed8936; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; font-size: 0.85rem; }
-    
-    .grid-4 {
-        display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 15px; margin-top: 30px;
-    }
-    .grid-item {
-        background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px;
-        border: 1px solid rgba(255,255,255,0.1);
+        background: #0a0f1a !important;
+        background-image: radial-gradient(circle at 20% 20%, #1e3a8a 0%, #030508 100%) !important;
     }
     
-    /* Naprawa widoczności mapy */
-    .deckgl-container { border-radius: 20px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); }
+    /* Nowy kontener wyceny - całkowicie inny od v6.0 */
+    .v11-card {
+        background: rgba(0, 0, 0, 0.8) !important;
+        border: 2px solid #ed8936 !important;
+        border-radius: 15px;
+        padding: 35px !important;
+        margin: 10px 0;
+        box-shadow: 0 0 30px rgba(237, 137, 54, 0.2);
+    }
+
+    .v11-price {
+        font-size: 85px !important;
+        font-weight: 900 !important;
+        color: #ffffff !important;
+        text-shadow: 2px 2px 10px rgba(0,0,0,0.5);
+    }
+
+    .v11-label {
+        color: #ed8936;
+        text-transform: uppercase;
+        letter-spacing: 3px;
+        font-weight: bold;
+    }
+
+    /* Ukrycie starych elementów Streamlit */
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
 
-# --- AUTH ---
-def hash_me(p): return hashlib.sha256(p.strip().encode()).hexdigest()
+# --- SYSTEM LOGOWANIA (Zmiana klucza ciasteczka wymusi przelogowanie) ---
+def make_hash(p): return hashlib.sha256(p.strip().encode()).hexdigest()
 cookie_manager = stx.CookieManager()
 
 @st.cache_data(ttl=5)
@@ -75,128 +78,109 @@ def load_users():
 
 user_db = load_users()
 if "auth" not in st.session_state: st.session_state.auth = False
-saved = cookie_manager.get(cookie="sqm_v10_token")
-if saved in user_db:
+
+# Nowy token sesji v11
+token = cookie_manager.get(cookie="sqm_v11_token")
+if token in user_db:
     st.session_state.auth = True
-    st.session_state.user = saved
+    st.session_state.user = token
 
 if not st.session_state.auth:
     _, c, _ = st.columns([1,1.5,1])
     with c:
-        st.image("https://www.sqm.pl/wp-content/themes/sqm/img/logo-sqm.png", width=200)
-        u = st.text_input("Logistyk")
-        p = st.text_input("Hasło", type="password")
-        if st.button("WEJDŹ DO SYSTEMU", use_container_width=True):
-            if u in user_db and user_db[u] == hash_me(p):
+        st.markdown("<h1 style='text-align:center; color:white;'>SQM VANTAGE v11</h1>", unsafe_allow_html=True)
+        u = st.text_input("Użytkownik").strip()
+        p = st.text_input("Hasło", type="password").strip()
+        if st.button("ZALOGUJ", use_container_width=True):
+            if u in user_db and user_db[u] == make_hash(p):
                 st.session_state.auth = True
                 st.session_state.user = u
-                cookie_manager.set("sqm_v10_token", u, expires_at=datetime.now()+timedelta(days=30))
+                cookie_manager.set("sqm_v11_token", u, expires_at=datetime.now()+timedelta(days=30))
                 st.rerun()
+            else: st.error("Błąd! Sprawdź dane w Google Sheets.")
     st.stop()
 
-# --- DATA LOAD ---
-@st.cache_data(ttl=60)
-def fetch_log_data():
+# --- DANE ---
+@st.cache_data(ttl=30)
+def fetch_data():
     b = pd.read_csv(URL_BAZA); o = pd.read_csv(URL_OPLATY)
     b.columns = b.columns.str.strip()
-    def clean(v):
+    def cl(v):
         s = re.sub(r'[^\d.]', '', str(v).replace(',', '.'))
         return float(s) if s else 0.0
-    for c in ['Eksport', 'Import', 'Postoj']: b[c] = b[c].apply(clean)
-    o['Wartosc'] = o['Wartosc'].apply(clean)
+    for c in ['Eksport', 'Import', 'Postoj']: b[c] = b[c].apply(cl)
+    o['Wartosc'] = o['Wartosc'].apply(cl)
     return b, o
 
-df_baza, df_oplaty = fetch_log_data()
+df_baza, df_oplaty = fetch_data()
 cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc']))
 
 # --- SIDEBAR ---
 with st.sidebar:
     st.image("https://www.sqm.pl/wp-content/themes/sqm/img/logo-sqm.png", width=150)
-    st.markdown(f"Operator: **{st.session_state.user}**")
-    
-    # KLUCZOWA ZMIANA: WYBÓR TRYBU
-    mode = st.radio("STRATEGIA WYCENY", ["DEDYKOWANY (Pełne auto)", "DOŁADUNEK (Z kilograma)"])
-    
-    dest = st.selectbox("MIASTO", sorted(df_baza['Miasto'].unique()))
-    weight = st.number_input("WAGA SPRZĘTU (kg)", value=500, step=50)
-    d1 = st.date_input("START", datetime.now())
-    d2 = st.date_input("KONIEC", datetime.now() + timedelta(days=2))
+    mode = st.radio("STRATEGIA", ["DEDYKOWANY (Pełne auto)", "DOŁADUNEK (z wagi)"])
+    dest = st.selectbox("MIASTO DOCELOWE", sorted(df_baza['Miasto'].unique()))
+    w_input = st.number_input("WAGA (kg)", value=500, step=50)
+    d1 = st.date_input("ZAŁADUNEK", datetime.now())
+    d2 = st.date_input("POWRÓT", datetime.now() + timedelta(days=2))
     dni = max(0, (d2-d1).days)
-    
     if st.button("WYLOGUJ"):
-        cookie_manager.delete("sqm_v10_token")
+        cookie_manager.delete("sqm_v11_token")
         st.session_state.auth = False
         st.rerun()
 
-# --- LOGIKA BIZNESOWA ---
-w_total = weight * cfg.get('WAGA_BUFOR', 1.2)
-v_type = "BUS" if w_total <= 1200 else "SOLO" if w_total <= 5500 else "FTL"
-
+# --- KALKULACJA ---
+w_calc = w_input * cfg.get('WAGA_BUFOR', 1.2)
+# Dobór auta na podstawie wagi (nawet w doładunku musimy wiedzieć jakim autem jedziemy)
+v_type = "BUS" if w_calc <= 1200 else "SOLO" if w_calc <= 5500 else "FTL"
 res = df_baza[(df_baza['Miasto'] == dest) & (df_baza['Typ_Pojazdu'] == v_type)]
 
 if not res.empty:
     r = res.iloc[0]
-    
     if "DEDYKOWANY" in mode:
-        # Płacimy za całe auto (stawka ryczałtowa)
-        exp = r['Eksport']
-        imp = r['Import']
-        label_mode = "Dedykowany"
+        exp, imp = r['Eksport'], r['Import']
     else:
-        # Płacimy za kilogramy (doładunek)
-        exp = r['Eksport'] * w_total
-        imp = r['Import'] * w_total
-        label_mode = "Doładunek"
+        exp, imp = r['Eksport'] * w_calc, r['Import'] * w_calc
 
-    standby = r['Postoj'] * dni
-    parking = dni * cfg.get('PARKING_DAY', 30)
-    grand = exp + imp + standby + parking
-    
-    # Dodatki celne
-    ata = cfg.get('ATA_CARNET', 166) if dest in ["Londyn", "Genewa", "Zurych"] else 0
-    grand += ata
+    postoj = r['Postoj'] * dni
+    oplaty = (dni * cfg.get('PARKING_DAY', 30)) + (cfg.get('ATA_CARNET', 166) if dest in ["Londyn", "Genewa", "Zurych"] else 0)
+    total = exp + imp + postoj + oplaty
 
-    # --- RENDEROWANIE ---
-    st.title(f"VANTAGE LOGISTICS / {dest.upper()}")
+    # --- WIDOK ---
+    st.markdown(f"<h2 style='color:white;'>Trasa: Komorniki ➔ {dest.upper()}</h2>", unsafe_allow_html=True)
     
-    col_ui, col_map = st.columns([1.5, 1])
+    col_price, col_map = st.columns([1.2, 1])
     
-    with col_ui:
+    with col_price:
         st.markdown(f"""
-            <div class="main-card">
-                <div class="orange-tag">Sugerowany Budżet ({label_mode})</div>
-                <div class="stat-val">€ {grand:,.2f}</div>
-                <div style="color:#94a3b8; margin-top:10px;">
-                    Transport {v_type} | Realna waga: {weight}kg | Wycena operacyjna: {w_total:.0f}kg
-                </div>
-                
-                <div class="grid-4">
-                    <div class="grid-item"><small>EKSPORT</small><br><b>€ {exp:,.2f}</b></div>
-                    <div class="grid-item"><small>IMPORT</small><br><b>€ {imp:,.2f}</b></div>
-                    <div class="grid-item"><small>POSTÓJ ({dni}d)</small><br><b>€ {standby:,.2f}</b></div>
-                    <div class="grid-item"><small>DODATKI</small><br><b>€ {parking+ata:,.2f}</b></div>
-                </div>
+            <div class="v11-card">
+                <div class="v11-label">{mode} / {v_type}</div>
+                <div class="v11-price">€ {total:,.2f}</div>
+                <hr style="border-color: rgba(255,255,255,0.1);">
+                <table style="width:100%; color:white;">
+                    <tr><td>Eksport:</td><td style="text-align:right">€ {exp:,.2f}</td></tr>
+                    <tr><td>Import:</td><td style="text-align:right">€ {imp:,.2f}</td></tr>
+                    <tr><td>Postój ({dni} d):</td><td style="text-align:right">€ {postoj:,.2f}</td></tr>
+                    <tr><td>Opłaty dodatkowe:</td><td style="text-align:right">€ {oplaty:,.2f}</td></tr>
+                </table>
             </div>
         """, unsafe_allow_html=True)
 
     with col_map:
-        target = CITY_GEO.get(dest, [13.4, 52.5])
+        # MAPA - Pydeck musi się tu wyrenderować
+        coords = CITY_GEO.get(dest, [13.4, 52.5])
         st.pydeck_chart(pdk.Deck(
             map_style='mapbox://styles/mapbox/dark-v10',
             initial_view_state=pdk.ViewState(
-                latitude=(START_COORDS[1] + target[1])/2,
-                longitude=(START_COORDS[0] + target[0])/2,
+                latitude=(START_COORDS[1] + coords[1])/2,
+                longitude=(START_COORDS[0] + coords[0])/2,
                 zoom=4, pitch=45
             ),
             layers=[
-                pdk.Layer("ArcLayer", data=pd.DataFrame([{"s": START_COORDS, "t": target}]),
+                pdk.Layer("ArcLayer", data=pd.DataFrame([{"s": START_COORDS, "t": coords}]),
                           get_source_position="s", get_target_position="t",
-                          get_source_color=[237, 137, 54], get_target_color=[255, 255, 255], get_width=6),
-                pdk.Layer("ScatterplotLayer", data=pd.DataFrame([{"p": START_COORDS}]),
-                          get_position="p", get_color=[237, 137, 54], get_radius=50000)
+                          get_source_color=[237, 137, 54], get_target_color=[255, 255, 255], get_width=5)
             ]
         ))
 else:
-    st.error(f"Brak stawek w bazie dla: {dest} / {v_type}")
-
-st.markdown("<p style='text-align:center; opacity:0.2; margin-top:50px;'>SQM Multimedia Solutions Logistics | 2026</p>", unsafe_allow_html=True)
+    st.error(f"Brak stawek w bazie dla {dest} / {v_type}")
