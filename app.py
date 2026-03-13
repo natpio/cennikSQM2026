@@ -43,27 +43,27 @@ CITY_COORDS = {
     "Rzym": [41.9028, 12.4964], "Sztokholm": [59.3293, 18.0686]
 }
 
-st.set_page_config(page_title="SQM VENTAGE v5.0.6", layout="wide")
+st.set_page_config(page_title="SQM VENTAGE v5.0.7", layout="wide")
 
-# --- CSS Z FIXEM DLA INPUTÓW I HTML ---
+# --- NAPRAWA CSS (INPUTY + HTML) ---
 st.markdown("""
     <style>
     .stApp { background-color: #05070a !important; }
     [data-testid="stSidebar"] { background-color: #0f172a !important; border-right: 1px solid #1e293b; }
 
-    /* Fix dla białych pól w sidebarze */
+    /* Naprawa białych pól i tekstu w sidebarze */
     div[data-baseweb="select"] > div, 
     div[data-baseweb="input"] > div,
-    .stNumberInput div[data-baseweb="input"] {
+    .stNumberInput div[data-baseweb="input"],
+    .stDateInput div[data-baseweb="input"] {
         background-color: #1e293b !important;
-        color: white !important;
+        color: #ffffff !important;
         border: 1px solid #334155 !important;
     }
     
-    /* Wymuszenie koloru tekstu w inputach */
     input {
-        color: white !important;
-        -webkit-text-fill-color: white !important;
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
     }
 
     /* Branding */
@@ -72,11 +72,13 @@ st.markdown("""
     .brand-v { background: #ed8936; color: #000; padding: 2px 8px; border-radius: 4px; font-style: italic; }
     .brand-ver { font-size: 10px; color: #94a3b8 !important; margin-top: 5px; }
 
-    /* Nagłówek i Karty */
+    /* Typografia */
     .route-header { font-size: 30px !important; font-weight: 900; color: #ffffff; border-bottom: 3px solid #ed8936; margin-bottom: 25px; padding-bottom: 10px; }
+    [data-testid="stSidebar"] label p { color: #94a3b8 !important; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; }
+
+    /* Karty */
     .hero-card { background: linear-gradient(145deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 20px; padding: 30px; margin-bottom: 30px; }
     .main-price-value { color: #ffffff; font-size: 64px; font-weight: 950; line-height: 1.1; margin: 15px 0; }
-
     .breakdown-container { display: flex; flex-wrap: wrap; gap: 20px; margin: 20px 0; padding: 15px 0; border-top: 1px solid rgba(255,255,255,0.1); border-bottom: 1px solid rgba(255,255,255,0.1); }
     .breakdown-item { font-size: 14px; color: #94a3b8; }
     .breakdown-item b { color: #ffffff; font-size: 16px; }
@@ -84,24 +86,39 @@ st.markdown("""
     .alt-card { background: #0f172a; border-left: 5px solid #475569; padding: 18px 25px; margin-bottom: 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
     .alt-best { border-left-color: #ed8936; background: rgba(237, 137, 54, 0.1); }
     .price-tag { color: #ed8936; font-size: 20px; font-weight: 900; }
-    
-    /* Fix dla etykiet */
-    [data-testid="stSidebar"] label p { color: #94a3b8 !important; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- PROSTE LOGOWANIE ---
-if "authenticated" not in st.session_state: st.session_state.authenticated = False
+# --- SYSTEM LOGOWANIA ---
+def make_hash(p): return hashlib.sha256(p.strip().encode()).hexdigest()
+
+@st.cache_data(ttl=60)
+def load_users():
+    try:
+        df = pd.read_csv(URL_USERS)
+        df.columns = df.columns.str.strip()
+        return dict(zip(df['username'].astype(str), df['password'].astype(str)))
+    except:
+        # Fallback jeśli Google Sheets nie odpowie
+        return {"admin": "f3e99d9459eeb7ffc4cd407d890fbf1db011208fa12d8edc501a7ec26da106a3"}
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
     _, col, _ = st.columns([1, 1.2, 1])
     with col:
         st.markdown("<h2 style='text-align:center; color:white; margin-top:50px;'>SQM VENTAGE</h2>", unsafe_allow_html=True)
-        u = st.text_input("Użytkownik")
-        p = st.text_input("Hasło", type="password")
+        u_in = st.text_input("Użytkownik", key="login_user")
+        p_in = st.text_input("Hasło", type="password", key="login_pass")
         if st.button("ZALOGUJ", use_container_width=True):
-            if p == "sqm2024":
-                st.session_state.authenticated = True; st.rerun()
+            users = load_users()
+            if u_in in users and users[u_in] == make_hash(p_in):
+                st.session_state.authenticated = True
+                st.session_state.current_user = u_in
+                st.rerun()
+            else:
+                st.error("Błędne dane logowania")
     st.stop()
 
 # --- DANE ---
@@ -122,7 +139,7 @@ cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc'])) if not df_oplaty.em
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.markdown('<div class="brand-container"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div><div class="brand-ver">SYSTEM LOGISTYCZNY VER. 5.0.6</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="brand-container"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div><div class="brand-ver">SYSTEM LOGISTYCZNY VER. 5.0.7</div></div>', unsafe_allow_html=True)
     
     st.markdown("### 🚛 PARAMETRY")
     trip_type = st.radio("KIERUNEK", ["PEŁNA TRASA (EXP+IMP)", "TYLKO DOSTAWA (ONE-WAY)"])
@@ -171,28 +188,25 @@ if not df_baza.empty:
 # --- WIDOK ---
 if results:
     best = min(results, key=lambda x: x['Total'])
-    # Obliczanie sugerowanej daty wyjazdu (Data montażu - czas tranzytu - 1 dzień zapasu)
     suggested_departure = d_start - timedelta(days=best['transit'] + 1)
     
     st.markdown(f'<div class="route-header">KOMORNIKI ➔ {target.upper()}</div>', unsafe_allow_html=True)
     
     cl, cr = st.columns([1.8, 1])
     with cl:
-        # KARTA GŁÓWNA - CAŁOŚĆ W JEDNYM ST.MARKDOWN
-        imp_html = f'<div class="breakdown-item">Import: <b>€ {best["imp"]:,.0f}</b></div>' if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else ""
+        # KARTA KOSZTÓW - POPRAWIONE RENDEROWANIE
+        imp_val = f'<div class="breakdown-item">Import: <b>€ {best["imp"]:,.0f}</b></div>' if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else ""
         
         st.markdown(f"""
             <div class="hero-card">
-                <div style='color:#ed8936; font-size:14px; font-weight:800; letter-spacing:1px;'>KOSZT SZACUNKOWY NETTO</div>
+                <div style='color:#ed8936; font-size:14px; font-weight:800;'>KOSZT SZACUNKOWY NETTO</div>
                 <div class="main-price-value">€ {best['Total']:,.2f}</div>
-                
                 <div class="breakdown-container">
                     <div class="breakdown-item">Eksport: <b>€ {best['exp']:,.0f}</b></div>
-                    {imp_html}
+                    {imp_val}
                     <div class="breakdown-item">Postój (montaż): <b>€ {best['stay']:,.0f}</b></div>
                     <div class="breakdown-item">Opłaty dodatkowe: <b>€ {best['fees']:,.0f}</b></div>
                 </div>
-
                 <div style='display:grid; grid-template-columns: repeat(4, 1fr); gap:15px;'>
                     <div style='background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; text-align:center;'>
                         <div style='color:#94a3b8; font-size:10px; font-weight:700;'>TRANZYT</div>
@@ -228,5 +242,5 @@ if results:
         b_pos, d_pos = CITY_COORDS["Komorniki (Baza)"], CITY_COORDS.get(target, [48.8, 2.3])
         st.map(pd.DataFrame({'lat': np.linspace(b_pos[0], d_pos[0], 25), 'lon': np.linspace(b_pos[1], d_pos[1], 25)}), color='#ed8936', size=15)
         # Sugerowana data wyjazdu pod mapą
-        st.warning(f"🚚 **Sugerowana data wyjazdu:** {suggested_departure.strftime('%Y-%m-%d')}")
-        st.caption(f"Wyliczenie: {best['transit']} dni tranzytu + 1 dzień buforu przed montażem ({d_start}).")
+        st.warning(f"🚚 **SUGEROWANA DATA WYJAZDU: {suggested_departure.strftime('%Y-%m-%d')}**")
+        st.info(f"Wyliczenie: {best['transit']} dni drogi + 1 dzień zapasu przed montażem ({d_start}).")
