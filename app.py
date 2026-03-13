@@ -43,15 +43,15 @@ CITY_COORDS = {
     "Rzym": [41.9028, 12.4964], "Sztokholm": [59.3293, 18.0686]
 }
 
-st.set_page_config(page_title="SQM VENTAGE v5.0.5", layout="wide")
+st.set_page_config(page_title="SQM VENTAGE v5.0.6", layout="wide")
 
-# --- CSS Z NAPRAWĄ POLA INPUT I RENDEROWANIA ---
+# --- CSS Z FIXEM DLA INPUTÓW I HTML ---
 st.markdown("""
     <style>
     .stApp { background-color: #05070a !important; }
     [data-testid="stSidebar"] { background-color: #0f172a !important; border-right: 1px solid #1e293b; }
 
-    /* Fix dla pól tekstowych i selectboxów w sidebarze */
+    /* Fix dla białych pól w sidebarze */
     div[data-baseweb="select"] > div, 
     div[data-baseweb="input"] > div,
     .stNumberInput div[data-baseweb="input"] {
@@ -60,6 +60,7 @@ st.markdown("""
         border: 1px solid #334155 !important;
     }
     
+    /* Wymuszenie koloru tekstu w inputach */
     input {
         color: white !important;
         -webkit-text-fill-color: white !important;
@@ -69,13 +70,9 @@ st.markdown("""
     .brand-container { padding: 10px 0 20px 0; text-align: center; border-bottom: 1px solid #1e293b; margin-bottom: 20px; }
     .brand-logo { font-family: 'Inter', sans-serif; font-size: 20px; font-weight: 900; color: #ffffff; display: flex; align-items: center; justify-content: center; gap: 10px; }
     .brand-v { background: #ed8936; color: #000; padding: 2px 8px; border-radius: 4px; font-style: italic; }
-    .brand-ver { font-size: 10px; color: #ffffff !important; margin-top: 5px; font-weight: 600; }
+    .brand-ver { font-size: 10px; color: #94a3b8 !important; margin-top: 5px; }
 
-    /* Typografia Sidebar */
-    [data-testid="stSidebar"] label p { color: #94a3b8 !important; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; }
-    [data-testid="stSidebar"] h3 { color: #ffffff !important; font-size: 1.1rem !important; margin-top: 1rem; }
-
-    /* Karty Wyników */
+    /* Nagłówek i Karty */
     .route-header { font-size: 30px !important; font-weight: 900; color: #ffffff; border-bottom: 3px solid #ed8936; margin-bottom: 25px; padding-bottom: 10px; }
     .hero-card { background: linear-gradient(145deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 20px; padding: 30px; margin-bottom: 30px; }
     .main-price-value { color: #ffffff; font-size: 64px; font-weight: 950; line-height: 1.1; margin: 15px 0; }
@@ -84,10 +81,12 @@ st.markdown("""
     .breakdown-item { font-size: 14px; color: #94a3b8; }
     .breakdown-item b { color: #ffffff; font-size: 16px; }
 
-    /* Porównanie Pojazdów */
     .alt-card { background: #0f172a; border-left: 5px solid #475569; padding: 18px 25px; margin-bottom: 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
     .alt-best { border-left-color: #ed8936; background: rgba(237, 137, 54, 0.1); }
     .price-tag { color: #ed8936; font-size: 20px; font-weight: 900; }
+    
+    /* Fix dla etykiet */
+    [data-testid="stSidebar"] label p { color: #94a3b8 !important; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -101,11 +100,11 @@ if not st.session_state.authenticated:
         u = st.text_input("Użytkownik")
         p = st.text_input("Hasło", type="password")
         if st.button("ZALOGUJ", use_container_width=True):
-            if p == "sqm2024": # uproszczone hasło dla testu
+            if p == "sqm2024":
                 st.session_state.authenticated = True; st.rerun()
     st.stop()
 
-# --- POBIERANIE DANYCH ---
+# --- DANE ---
 @st.cache_data(ttl=60)
 def fetch_data():
     try:
@@ -123,7 +122,7 @@ cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc'])) if not df_oplaty.em
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.markdown('<div class="brand-container"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div><div class="brand-ver">SYSTEM LOGISTYCZNY VER. 5.0.5</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="brand-container"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div><div class="brand-ver">SYSTEM LOGISTYCZNY VER. 5.0.6</div></div>', unsafe_allow_html=True)
     
     st.markdown("### 🚛 PARAMETRY")
     trip_type = st.radio("KIERUNEK", ["PEŁNA TRASA (EXP+IMP)", "TYLKO DOSTAWA (ONE-WAY)"])
@@ -172,12 +171,15 @@ if not df_baza.empty:
 # --- WIDOK ---
 if results:
     best = min(results, key=lambda x: x['Total'])
+    # Obliczanie sugerowanej daty wyjazdu (Data montażu - czas tranzytu - 1 dzień zapasu)
+    suggested_departure = d_start - timedelta(days=best['transit'] + 1)
+    
     st.markdown(f'<div class="route-header">KOMORNIKI ➔ {target.upper()}</div>', unsafe_allow_html=True)
     
     cl, cr = st.columns([1.8, 1])
     with cl:
-        # GŁÓWNA KARTA Z POPRAWNYM HTML
-        imp_row = f'<div class="breakdown-item">Import: <b>€ {best["imp"]:,.0f}</b></div>' if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else ""
+        # KARTA GŁÓWNA - CAŁOŚĆ W JEDNYM ST.MARKDOWN
+        imp_html = f'<div class="breakdown-item">Import: <b>€ {best["imp"]:,.0f}</b></div>' if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else ""
         
         st.markdown(f"""
             <div class="hero-card">
@@ -186,7 +188,7 @@ if results:
                 
                 <div class="breakdown-container">
                     <div class="breakdown-item">Eksport: <b>€ {best['exp']:,.0f}</b></div>
-                    {imp_row}
+                    {imp_html}
                     <div class="breakdown-item">Postój (montaż): <b>€ {best['stay']:,.0f}</b></div>
                     <div class="breakdown-item">Opłaty dodatkowe: <b>€ {best['fees']:,.0f}</b></div>
                 </div>
@@ -225,4 +227,6 @@ if results:
     with cr:
         b_pos, d_pos = CITY_COORDS["Komorniki (Baza)"], CITY_COORDS.get(target, [48.8, 2.3])
         st.map(pd.DataFrame({'lat': np.linspace(b_pos[0], d_pos[0], 25), 'lon': np.linspace(b_pos[1], d_pos[1], 25)}), color='#ed8936', size=15)
-        st.info(f"**Data montażu:** {d_start}")
+        # Sugerowana data wyjazdu pod mapą
+        st.warning(f"🚚 **Sugerowana data wyjazdu:** {suggested_departure.strftime('%Y-%m-%d')}")
+        st.caption(f"Wyliczenie: {best['transit']} dni tranzytu + 1 dzień buforu przed montażem ({d_start}).")
