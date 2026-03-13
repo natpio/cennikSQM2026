@@ -45,13 +45,13 @@ CITY_COORDS = {
 
 st.set_page_config(page_title="SQM VENTAGE v11.1", layout="wide")
 
-# --- CSS Z FIXAMI DLA sidebara I BIAŁYCH PÓŁ ---
+# --- CSS: PEŁNY STYL SQM ---
 st.markdown("""
     <style>
     .stApp { background-color: #05070a !important; }
     [data-testid="stSidebar"] { background-color: #0f172a !important; border-right: 1px solid #1e293b; }
 
-    /* Fix dla białych pól wprowadzania danych */
+    /* Fix dla białych pól wprowadzania danych w Sidebarze */
     div[data-baseweb="select"] > div, 
     div[data-baseweb="input"] > div,
     .stNumberInput div[data-baseweb="input"],
@@ -100,7 +100,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- SYSTEM LOGOWANIA (v11 Integracja) ---
+# --- SYSTEM LOGOWANIA ---
 def make_hash(p): return hashlib.sha256(p.strip().encode()).hexdigest()
 cookie_manager = stx.CookieManager()
 
@@ -114,15 +114,18 @@ def load_users():
         return {"admin": "f3e99d9459eeb7ffc4cd407d890fbf1db011208fa12d8edc501a7ec26da106a3"}
 
 user_db = load_users()
-if "user" not in st.session_state: st.session_state.user = ""
-if "auth" not in st.session_state: st.session_state.auth = False
 
-# Sprawdzenie ciasteczka
+# Inicjalizacja stanu sesji
+if "auth" not in st.session_state: st.session_state.auth = False
+if "user" not in st.session_state: st.session_state.user = ""
+
+# Obsługa ciasteczek (Autologowanie)
 token = cookie_manager.get(cookie="sqm_v11_token")
 if token in user_db and not st.session_state.auth:
     st.session_state.auth = True
     st.session_state.user = token
 
+# Ekran Logowania
 if not st.session_state.auth:
     _, col, _ = st.columns([1, 1.2, 1])
     with col:
@@ -136,10 +139,10 @@ if not st.session_state.auth:
                 cookie_manager.set("sqm_v11_token", u_in, expires_at=datetime.now()+timedelta(days=7))
                 st.rerun()
             else:
-                st.error("Błędne dane logowania")
+                st.error("Nieprawidłowy login lub hasło.")
     st.stop()
 
-# --- POBIERANIE DANYCH ---
+# --- POBIERANIE DANYCH LOGISTYCZNYCH ---
 @st.cache_data(ttl=60)
 def fetch_data():
     try:
@@ -155,7 +158,7 @@ def fetch_data():
 df_baza, df_oplaty = fetch_data()
 cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc'])) if not df_oplaty.empty else {}
 
-# --- SIDEBAR ---
+# --- SIDEBAR (PARAMETRY I WYLOGOWANIE) ---
 with st.sidebar:
     st.markdown('<div class="brand-container"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div><div class="brand-ver">SYSTEM LOGISTYCZNY VER. 11.1</div></div>', unsafe_allow_html=True)
     st.markdown(f"👤 Zalogowany: **{st.session_state.user}**")
@@ -166,7 +169,7 @@ with st.sidebar:
     target = st.selectbox("CEL PODRÓŻY", sorted(TRANSIT_DATA.keys()))
     
     base_weight = st.number_input("WAGA PROJEKTU GŁÓWNEGO (KG)", value=1000, step=100)
-    real_weight = base_weight * 1.20 # Doliczenie 20% bufora
+    real_weight = base_weight * 1.20 # Automatyczny bufor 20%
     st.markdown(f'<div class="weight-info">WAGA PROJEKTU + AKCESORIA: {real_weight:,.0f} KG</div>', unsafe_allow_html=True)
     
     st.markdown("### 📅 TERMINARZ")
@@ -176,13 +179,15 @@ with st.sidebar:
         d_end = st.date_input("OSTATNI DZIEŃ DEMONTAŻU", d_start + timedelta(days=5))
         days_stay = max(0, (d_end - d_start).days)
 
+    st.markdown("---")
+    # POPRAWIONY PRZYCISK WYLOGOWANIA
     if st.button("🚪 WYLOGUJ", use_container_width=True):
-        cookie_manager.delete("sqm_v11_token")
-        st.session_state.auth = False
+        cookie_manager.delete("sqm_v11_token") # Usunięcie ciasteczka
+        st.session_state.auth = False # Reset stanu sesji
         st.session_state.user = ""
-        st.rerun()
+        st.rerun() # Przeładowanie strony do ekranu logowania
 
-# --- OBLICZENIA ---
+# --- LOGIKA OBLICZEŃ LOGISTYCZNYCH ---
 caps = {"BUS": 1200, "SOLO": 5500, "FTL": 10500}
 results = []
 
@@ -192,11 +197,17 @@ if not df_baza.empty:
         if not res.empty:
             r = res.mean(numeric_only=True)
             v_count = math.ceil(real_weight / cap)
-            transit = TRANSIT_DATA.get(target, {}).get("BUS" if v_type=="BUS" else "FTL/SOLO", 2)
+            transit_days = TRANSIT_DATA.get(target, {}).get("BUS" if v_type=="BUS" else "FTL/SOLO", 2)
             
-            exp_v = (r['Eksport'] * v_count if mode == "DEDYKOWANY" else r['Eksport'] * (real_weight/cap))
-            imp_v = (r['Import'] * v_count if mode == "DEDYKOWANY" else r['Import'] * (real_weight/cap)) if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else 0
+            # Obliczenie stawek bazowych
+            if mode == "DEDYKOWANY":
+                exp_v = r['Eksport'] * v_count
+                imp_v = (r['Import'] * v_count) if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else 0
+            else: # Doładunek (proporcjonalnie do wagi)
+                exp_v = r['Eksport'] * (real_weight / cap)
+                imp_v = (r['Import'] * (real_weight / cap)) if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else 0
             
+            # Opłaty stałe i dodatkowe
             ata = (cfg.get('ATA_CARNET', 166) if target in ["Londyn", "Genewa", "Liverpool", "Manchester"] else 0)
             ferry = (cfg.get('Ferry_UK', 450) if any(x in target for x in ["Londyn", "Liverpool", "Manchester"]) else 0)
             park = (days_stay * cfg.get('PARKING_DAY', 30) * v_count)
@@ -204,12 +215,12 @@ if not df_baza.empty:
             
             total = exp_v + imp_v + stay_v + park + ata + ferry
             results.append({
-                "Pojazd": v_type, "Szt": v_count, "Total": total, "transit": transit, 
-                "load": min(100, (real_weight/(v_count*cap))*100), "exp": exp_v, "imp": imp_v, 
+                "Pojazd": v_type, "Szt": v_count, "Total": total, "transit": transit_days, 
+                "load": min(100, (real_weight / (v_count * cap)) * 100), "exp": exp_v, "imp": imp_v, 
                 "stay": stay_v, "fees": ata + ferry + park
             })
 
-# --- WIDOK ---
+# --- WIDOK GŁÓWNY (DASHBOARD) ---
 if results:
     best = min(results, key=lambda x: x['Total'])
     suggested_departure = d_start - timedelta(days=best['transit'] + 1)
@@ -218,7 +229,8 @@ if results:
     
     cl, cr = st.columns([1.8, 1])
     with cl:
-        imp_val = f'<div class="breakdown-item">Import: <b>€ {best["imp"]:,.0f}</b></div>' if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else ""
+        # GŁÓWNA KARTA WYNIKU
+        imp_val_html = f'<div class="breakdown-item">Import: <b>€ {best["imp"]:,.0f}</b></div>' if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else ""
         
         st.markdown(f"""
             <div class="hero-card">
@@ -226,7 +238,7 @@ if results:
                 <div class="main-price-value">€ {best['Total']:,.2f}</div>
                 <div class="breakdown-container">
                     <div class="breakdown-item">Eksport: <b>€ {best['exp']:,.0f}</b></div>
-                    {imp_val}
+                    {imp_val_html}
                     <div class="breakdown-item">Postój (montaż): <b>€ {best['stay']:,.0f}</b></div>
                     <div class="breakdown-item">Opłaty dodatkowe: <b>€ {best['fees']:,.0f}</b></div>
                 </div>
@@ -249,22 +261,28 @@ if results:
                     </div>
                 </div>
             </div>
-        """, unsafe_allow_html=True) # Parametr kluczowy do poprawnego wyświetlania HTML
+        """, unsafe_allow_html=True)
         
         st.markdown("### 📊 ANALIZA PORÓWNAWCZA")
         for r in sorted(results, key=lambda x: x['Total']):
-            is_best = "alt-best" if r['Pojazd'] == best['Pojazd'] else ""
+            is_best_class = "alt-best" if r['Pojazd'] == best['Pojazd'] else ""
             st.markdown(f"""
-                <div class="alt-card {is_best}">
+                <div class="alt-card {is_best_class}">
                     <div style='color:white;'><b>{r['Pojazd']}</b> <small style='color:#94a3b8; margin-left:10px;'>({r['Szt']} szt. | Ładunek {r['load']:.0f}%)</small></div>
                     <div class="price-tag">€ {r['Total']:,.2f}</div>
                 </div>
             """, unsafe_allow_html=True)
 
     with cr:
+        # MAPA TRANZYTU
         b_pos, d_pos = CITY_COORDS["Komorniki (Baza)"], CITY_COORDS.get(target, [48.8, 2.3])
-        st.map(pd.DataFrame({'lat': np.linspace(b_pos[0], d_pos[0], 25), 'lon': np.linspace(b_pos[1], d_pos[1], 25)}), color='#ed8936', size=15)
+        map_df = pd.DataFrame({
+            'lat': np.linspace(b_pos[0], d_pos[0], 25), 
+            'lon': np.linspace(b_pos[1], d_pos[1], 25)
+        })
+        st.map(map_df, color='#ed8936', size=15)
+        
         st.warning(f"🚚 **SUGEROWANA DATA WYJAZDU: {suggested_departure.strftime('%Y-%m-%d')}**")
-        st.info(f"Wyliczenie: {best['transit']} dni drogi + 1 dzień zapasu przed montażem ({d_start}).")
+        st.info(f"Logika: {best['transit']} dni drogi + 1 dzień zapasu przed montażem ({d_start}).")
 else:
-    st.error("Brak stawek w bazie dla wybranej trasy.")
+    st.error("Brak dostępnych stawek dla wybranej konfiguracji w bazie Google Sheets.")
