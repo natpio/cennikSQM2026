@@ -43,15 +43,13 @@ CITY_COORDS = {
     "Rzym": [41.9028, 12.4964], "Sztokholm": [59.3293, 18.0686]
 }
 
-st.set_page_config(page_title="SQM VENTAGE v11.1", layout="wide")
+st.set_page_config(page_title="SQM VENTAGE v11.2", layout="wide")
 
 # --- CSS: PEŁNY STYL SQM ---
 st.markdown("""
     <style>
     .stApp { background-color: #05070a !important; }
     [data-testid="stSidebar"] { background-color: #0f172a !important; border-right: 1px solid #1e293b; }
-
-    /* Fix dla białych pól wprowadzania danych w Sidebarze */
     div[data-baseweb="select"] > div, 
     div[data-baseweb="input"] > div,
     .stNumberInput div[data-baseweb="input"],
@@ -60,48 +58,33 @@ st.markdown("""
         color: #ffffff !important;
         border: 1px solid #334155 !important;
     }
-    
-    input {
-        color: #ffffff !important;
-        -webkit-text-fill-color: #ffffff !important;
-    }
-
+    input { color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; }
     .weight-info {
-        background: rgba(237, 137, 54, 0.1);
-        border: 1px solid #ed8936;
-        padding: 10px;
-        border-radius: 5px;
-        color: #ed8936;
-        font-size: 0.85rem;
-        font-weight: bold;
-        margin-top: -15px;
-        margin-bottom: 15px;
+        background: rgba(237, 137, 54, 0.1); border: 1px solid #ed8936;
+        padding: 10px; border-radius: 5px; color: #ed8936;
+        font-size: 0.85rem; font-weight: bold; margin-top: -15px; margin-bottom: 15px;
     }
-
-    /* Branding */
     .brand-container { padding: 10px 0 20px 0; text-align: center; border-bottom: 1px solid #1e293b; margin-bottom: 20px; }
     .brand-logo { font-family: 'Inter', sans-serif; font-size: 20px; font-weight: 900; color: #ffffff; display: flex; align-items: center; justify-content: center; gap: 10px; }
     .brand-v { background: #ed8936; color: #000; padding: 2px 8px; border-radius: 4px; font-style: italic; }
     .brand-ver { font-size: 10px; color: #94a3b8 !important; margin-top: 5px; }
-
-    /* UI Layout */
     .route-header { font-size: 30px !important; font-weight: 900; color: #ffffff; border-bottom: 3px solid #ed8936; margin-bottom: 25px; padding-bottom: 10px; }
     .hero-card { background: linear-gradient(145deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 20px; padding: 30px; margin-bottom: 30px; }
     .main-price-value { color: #ffffff; font-size: 64px; font-weight: 950; line-height: 1.1; margin: 15px 0; }
     .breakdown-container { display: flex; flex-wrap: wrap; gap: 20px; margin: 20px 0; padding: 15px 0; border-top: 1px solid rgba(255,255,255,0.1); border-bottom: 1px solid rgba(255,255,255,0.1); }
     .breakdown-item { font-size: 14px; color: #94a3b8; }
     .breakdown-item b { color: #ffffff; font-size: 16px; }
-
     .alt-card { background: #0f172a; border-left: 5px solid #475569; padding: 18px 25px; margin-bottom: 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
     .alt-best { border-left-color: #ed8936; background: rgba(237, 137, 54, 0.1); }
     .price-tag { color: #ed8936; font-size: 20px; font-weight: 900; }
-    
     [data-testid="stSidebar"] label p { color: #94a3b8 !important; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; }
     </style>
 """, unsafe_allow_html=True)
 
 # --- SYSTEM LOGOWANIA ---
 def make_hash(p): return hashlib.sha256(p.strip().encode()).hexdigest()
+
+# Inicjalizacja managera ciasteczek
 cookie_manager = stx.CookieManager()
 
 @st.cache_data(ttl=10)
@@ -115,12 +98,14 @@ def load_users():
 
 user_db = load_users()
 
-# Inicjalizacja stanu sesji
 if "auth" not in st.session_state: st.session_state.auth = False
 if "user" not in st.session_state: st.session_state.user = ""
 
-# Obsługa ciasteczek (Autologowanie)
-token = cookie_manager.get(cookie="sqm_v11_token")
+# LOGIKA OBSŁUGI CIASTECZEK
+# Musimy dać skryptowi szansę na pobranie ciasteczek, które Streamlit przesyła z opóźnieniem
+cookies = cookie_manager.get_all()
+token = cookies.get("sqm_v11_token")
+
 if token in user_db and not st.session_state.auth:
     st.session_state.auth = True
     st.session_state.user = token
@@ -136,6 +121,7 @@ if not st.session_state.auth:
             if u_in in user_db and user_db[u_in] == make_hash(p_in):
                 st.session_state.auth = True
                 st.session_state.user = u_in
+                # Ustawiamy ciasteczko
                 cookie_manager.set("sqm_v11_token", u_in, expires_at=datetime.now()+timedelta(days=7))
                 st.rerun()
             else:
@@ -160,7 +146,7 @@ cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc'])) if not df_oplaty.em
 
 # --- SIDEBAR (PARAMETRY I WYLOGOWANIE) ---
 with st.sidebar:
-    st.markdown('<div class="brand-container"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div><div class="brand-ver">SYSTEM LOGISTYCZNY VER. 11.1</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="brand-container"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div><div class="brand-ver">SYSTEM LOGISTYCZNY VER. 11.2</div></div>', unsafe_allow_html=True)
     st.markdown(f"👤 Zalogowany: **{st.session_state.user}**")
     
     st.markdown("### 🚛 PARAMETRY")
@@ -169,7 +155,7 @@ with st.sidebar:
     target = st.selectbox("CEL PODRÓŻY", sorted(TRANSIT_DATA.keys()))
     
     base_weight = st.number_input("WAGA PROJEKTU GŁÓWNEGO (KG)", value=1000, step=100)
-    real_weight = base_weight * 1.20 # Automatyczny bufor 20%
+    real_weight = base_weight * 1.20 
     st.markdown(f'<div class="weight-info">WAGA PROJEKTU + AKCESORIA: {real_weight:,.0f} KG</div>', unsafe_allow_html=True)
     
     st.markdown("### 📅 TERMINARZ")
@@ -180,14 +166,19 @@ with st.sidebar:
         days_stay = max(0, (d_end - d_start).days)
 
     st.markdown("---")
-    # POPRAWIONY PRZYCISK WYLOGOWANIA
-    if st.button("🚪 WYLOGUJ", use_container_width=True):
-        cookie_manager.delete("sqm_v11_token") # Usunięcie ciasteczka
-        st.session_state.auth = False # Reset stanu sesji
+    
+    # --- FIX WYLOGOWANIA v11.2 ---
+    if st.button("🚪 WYLOGUJ", use_container_width=True, key="logout_btn"):
+        # 1. Usuwamy ciasteczko
+        cookie_manager.delete("sqm_v11_token")
+        # 2. Czyścimy sesję
+        st.session_state.auth = False
         st.session_state.user = ""
-        st.rerun() # Przeładowanie strony do ekranu logowania
+        # 3. Zamiast samego rerun, dajemy Streamlitowi znać, że ma wyczyścić wszystko
+        st.cache_data.clear()
+        st.rerun()
 
-# --- LOGIKA OBLICZEŃ LOGISTYCZNYCH ---
+# --- LOGIKA OBLICZEŃ ---
 caps = {"BUS": 1200, "SOLO": 5500, "FTL": 10500}
 results = []
 
@@ -199,15 +190,13 @@ if not df_baza.empty:
             v_count = math.ceil(real_weight / cap)
             transit_days = TRANSIT_DATA.get(target, {}).get("BUS" if v_type=="BUS" else "FTL/SOLO", 2)
             
-            # Obliczenie stawek bazowych
             if mode == "DEDYKOWANY":
                 exp_v = r['Eksport'] * v_count
                 imp_v = (r['Import'] * v_count) if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else 0
-            else: # Doładunek (proporcjonalnie do wagi)
+            else:
                 exp_v = r['Eksport'] * (real_weight / cap)
                 imp_v = (r['Import'] * (real_weight / cap)) if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else 0
             
-            # Opłaty stałe i dodatkowe
             ata = (cfg.get('ATA_CARNET', 166) if target in ["Londyn", "Genewa", "Liverpool", "Manchester"] else 0)
             ferry = (cfg.get('Ferry_UK', 450) if any(x in target for x in ["Londyn", "Liverpool", "Manchester"]) else 0)
             park = (days_stay * cfg.get('PARKING_DAY', 30) * v_count)
@@ -220,18 +209,14 @@ if not df_baza.empty:
                 "stay": stay_v, "fees": ata + ferry + park
             })
 
-# --- WIDOK GŁÓWNY (DASHBOARD) ---
+# --- WIDOK GŁÓWNY ---
 if results:
     best = min(results, key=lambda x: x['Total'])
     suggested_departure = d_start - timedelta(days=best['transit'] + 1)
-    
     st.markdown(f'<div class="route-header">KOMORNIKI ➔ {target.upper()}</div>', unsafe_allow_html=True)
-    
     cl, cr = st.columns([1.8, 1])
     with cl:
-        # GŁÓWNA KARTA WYNIKU
         imp_val_html = f'<div class="breakdown-item">Import: <b>€ {best["imp"]:,.0f}</b></div>' if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else ""
-        
         st.markdown(f"""
             <div class="hero-card">
                 <div style='color:#ed8936; font-size:14px; font-weight:800;'>KOSZT SZACUNKOWY NETTO</div>
@@ -262,7 +247,6 @@ if results:
                 </div>
             </div>
         """, unsafe_allow_html=True)
-        
         st.markdown("### 📊 ANALIZA PORÓWNAWCZA")
         for r in sorted(results, key=lambda x: x['Total']):
             is_best_class = "alt-best" if r['Pojazd'] == best['Pojazd'] else ""
@@ -272,17 +256,11 @@ if results:
                     <div class="price-tag">€ {r['Total']:,.2f}</div>
                 </div>
             """, unsafe_allow_html=True)
-
     with cr:
-        # MAPA TRANZYTU
         b_pos, d_pos = CITY_COORDS["Komorniki (Baza)"], CITY_COORDS.get(target, [48.8, 2.3])
-        map_df = pd.DataFrame({
-            'lat': np.linspace(b_pos[0], d_pos[0], 25), 
-            'lon': np.linspace(b_pos[1], d_pos[1], 25)
-        })
+        map_df = pd.DataFrame({'lat': np.linspace(b_pos[0], d_pos[0], 25), 'lon': np.linspace(b_pos[1], d_pos[1], 25)})
         st.map(map_df, color='#ed8936', size=15)
-        
         st.warning(f"🚚 **SUGEROWANA DATA WYJAZDU: {suggested_departure.strftime('%Y-%m-%d')}**")
         st.info(f"Logika: {best['transit']} dni drogi + 1 dzień zapasu przed montażem ({d_start}).")
 else:
-    st.error("Brak dostępnych stawek dla wybranej konfiguracji w bazie Google Sheets.")
+    st.error("Brak dostępnych stawek w bazie.")
