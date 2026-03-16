@@ -49,86 +49,80 @@ CITY_COORDS = {
 }
 
 # --- 2. KONFIGURACJA STRONY ---
-st.set_page_config(page_title="SQM VENTAGE v5.2.7", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="SQM VENTAGE v5.2.8", layout="wide", initial_sidebar_state="expanded")
 
-# --- 3. STYLE CSS (AGRESYWNE WYMUSZANIE BIAŁEGO KOLORU) ---
+# --- 3. STYLE CSS (NAPRAWA ZLEWANIA SIĘ TEKSTU) ---
 st.markdown("""
     <style>
     .stApp { background-color: #05070a !important; }
     
-    /* SIDEBAR - GLOBALNE WYMUSZENIE */
+    /* SIDEBAR - EKSTREMALNY KONTRAST DLA ETYKIET */
     [data-testid="stSidebar"] { 
         background-color: #0f172a !important; 
         border-right: 1px solid #334155; 
     }
     
-    /* WSZYSTKIE TEKSTY W SIDEBARZE */
-    [data-testid="stSidebar"] *, 
+    /* Wymuszenie koloru białego dla wszystkich tekstów kontrolnych */
     [data-testid="stSidebar"] label, 
-    [data-testid="stSidebar"] p, 
-    [data-testid="stSidebar"] span, 
-    [data-testid="stSidebar"] small {
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] .stMarkdown p,
+    [data-testid="stSidebar"] .stSelectbox p,
+    [data-testid="stSidebar"] div[data-baseweb="select"] span {
         color: #ffffff !important;
-        fill: #ffffff !important;
+        font-weight: 700 !important;
+        opacity: 1 !important;
     }
 
-    /* Specyficzne poprawki dla widgetów Streamlit */
-    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {
-        background-color: transparent !important;
-    }
-    
-    [data-testid="stSidebar"] .stMarkdown h3 {
-        border-bottom: 1px solid #ed8936;
-        padding-bottom: 5px;
-        margin-top: 20px;
+    /* Naprawa czarnych napisów w radio buttonach */
+    [data-testid="stSidebar"] .stRadio label p {
+        color: #ffffff !important;
+        font-weight: 500 !important;
     }
 
-    /* Branding logo */
-    .brand-logo { font-size: 22px; font-weight: 900; color: #ffffff !important; }
-    .brand-v { background: #ed8936; color: #000 !important; padding: 2px 10px; border-radius: 4px; }
-
-    /* Inputy i Selektory - tło i obramowanie */
-    div[data-baseweb="select"] > div, 
-    div[data-baseweb="input"] > div, 
-    div[data-baseweb="base-input"] {
+    /* Naprawa czarnych napisów w inputach (daty, liczby) */
+    [data-testid="stSidebar"] input {
+        color: #ffffff !important;
         background-color: #1e293b !important;
-        border: 1px solid #475569 !important;
-    }
-    
-    /* Tekst wpisywany w pola */
-    input { 
-        color: #ffffff !important; 
-        -webkit-text-fill-color: #ffffff !important; 
+        -webkit-text-fill-color: #ffffff !important;
     }
 
-    /* GŁÓWNY PANEL */
+    /* GŁÓWNY PANEL - KARTA WYNIKÓW */
     .route-header { font-size: 32px !important; font-weight: 900; color: #ffffff; border-bottom: 4px solid #ed8936; margin-bottom: 30px; padding-bottom: 10px; }
     .hero-card { background: linear-gradient(145deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 24px; padding: 35px; margin-bottom: 30px; }
     .main-price-value { color: #ffffff; font-size: 72px; font-weight: 950; margin: 10px 0; line-height: 1; }
     
-    /* Statystyki na dole karty głównej */
-    .stat-box {
-        background: rgba(255,255,255,0.07);
-        padding: 12px 20px;
-        border-radius: 12px;
-        border: 1px solid rgba(255,255,255,0.1);
-        text-align: center;
-        min-width: 120px;
+    /* SZCZEGÓŁOWE ROZBICIE KOSZTÓW */
+    .breakdown-grid { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); 
+        gap: 25px; 
+        margin: 30px 0; 
+        padding: 25px 0; 
+        border-top: 1px solid rgba(255,255,255,0.1); 
+        border-bottom: 1px solid rgba(255,255,255,0.1); 
     }
-    .stat-label { color: #94a3b8 !important; font-size: 10px; text-transform: uppercase; font-weight: 700; margin-bottom: 4px; }
-    .stat-value { color: #ffffff !important; font-size: 18px; font-weight: 900; }
-
-    .breakdown-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; margin: 25px 0; padding: 25px 0; border-top: 1px solid rgba(255,255,255,0.1); border-bottom: 1px solid rgba(255,255,255,0.1); }
-    .breakdown-item { font-size: 13px; color: #94a3b8 !important; }
-    .breakdown-item b { color: #ffffff !important; font-size: 18px; display: block; margin-top: 5px; }
+    .cost-item { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+    .cost-item b { color: #ffffff; font-size: 20px; display: block; margin-top: 5px; font-weight: 900; }
     
+    /* BOX PARAMETRÓW NA DOLE */
+    .stat-container { display: flex; gap: 15px; margin-top: 20px; }
+    .stat-pill { 
+        background: rgba(237, 137, 54, 0.15); 
+        border: 1px solid #ed8936; 
+        padding: 8px 15px; 
+        border-radius: 8px; 
+        color: #ed8936; 
+        font-weight: 800;
+        font-size: 13px;
+    }
+
     .alt-card { background: #0f172a; border-left: 5px solid #334155; padding: 20px 25px; margin-bottom: 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; }
     .alt-best { border-left-color: #ed8936; background: rgba(237, 137, 54, 0.05); }
-    .price-tag { color: #ed8936 !important; font-size: 22px; font-weight: 900; }
+    .price-tag { color: #ed8936; font-size: 22px; font-weight: 900; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 4. FUNKCJE POMOCNICZE ---
+# --- 4. FUNKCJE ---
 def make_hash(password): return hashlib.sha256(password.strip().encode()).hexdigest()
 
 @st.cache_data(ttl=60)
@@ -170,28 +164,26 @@ if not st.session_state.authenticated:
             else: st.error("Błędny login lub hasło.")
     st.stop()
 
-# --- 6. DANE ---
+# --- 6. PRZYGOTOWANIE DANYCH ---
 df_baza, df_oplaty = fetch_data()
 cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc'])) if not df_oplaty.empty else {}
 
-# --- 7. SIDEBAR (BIAŁE NAPISY) ---
+# --- 7. SIDEBAR ---
 with st.sidebar:
     st.markdown('<div style="text-align:center; margin-bottom:20px;"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div></div>', unsafe_allow_html=True)
     
-    st.subheader("Konfiguracja Trasy")
     trip_type = st.radio("KIERUNEK", ["PEŁNA TRASA (EXP+IMP)", "TYLKO DOSTAWA (ONE-WAY)"])
     mode = st.radio("STRATEGIA", ["DEDYKOWANY", "DOŁADUNEK"])
     target_city = st.selectbox("MIEJSCE DOCELOWE", sorted(TRANSIT_DATA.keys()))
     
     st.markdown("---")
-    st.subheader("Parametry Ładunku")
     weight_netto = st.number_input("WAGA NETTO (KG)", value=1000, step=100)
     weight_brutto = weight_netto * 1.20
     
     st.markdown(f"""
-        <div style="background:rgba(237,137,54,0.1); border:2px solid #ed8936; padding:15px; border-radius:10px; color:#ed8936; text-align:center;">
-            <div style="font-size:11px; font-weight:bold; color:#ffffff;">SZACUNKOWA WAGA BRUTTO</div>
-            <div style="font-size:24px; font-weight:900; color:#ed8936;">{weight_brutto:,.0f} KG</div>
+        <div style="background:rgba(237,137,54,0.1); border:1px solid #ed8936; padding:15px; border-radius:10px; color:#ed8936; text-align:center;">
+            <div style="font-size:10px; font-weight:bold;">BRUTTO (ESTYMACJA)</div>
+            <div style="font-size:22px; font-weight:900;">{weight_brutto:,.0f} KG</div>
         </div>
     """, unsafe_allow_html=True)
     
@@ -202,80 +194,92 @@ with st.sidebar:
         date_end = st.date_input("DZIEŃ DEMONTAŻU", date_start + timedelta(days=4))
         days_stay = max(0, (date_end - date_start).days)
         
-    st.markdown("---")
     if st.button("🚪 WYLOGUJ", use_container_width=True):
         st.session_state.clear()
         st.rerun()
 
-# --- 8. TABS ---
+# --- 8. LOGIKA OBLICZEŃ ---
+v_types = {"BUS": 1200, "SOLO": 5500, "FTL": 10500}
+final_results = []
+
+if not df_baza.empty:
+    for v_name, v_cap in v_types.items():
+        match = df_baza[(df_baza['Miasto'] == target_city) & (df_baza['Typ_Pojazdu'] == v_name)]
+        if not match.empty:
+            row = match.iloc[0]
+            count = math.ceil(weight_brutto / v_cap)
+            tr = TRANSIT_DATA.get(target_city, {}).get("BUS" if v_name=="BUS" else "FTL/SOLO", 2)
+            
+            # Obliczenia szczegółowe
+            c_exp = row['Eksport'] * (count if mode == "DEDYKOWANY" else (weight_brutto / v_cap))
+            c_imp = (row['Import'] * (count if mode == "DEDYKOWANY" else (weight_brutto / v_cap))) if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else 0
+            c_stay = row['Postoj'] * days_stay * count
+            c_park = (days_stay * cfg.get('PARKING_DAY', 30) * count)
+            
+            # ATA i Promy (tylko UK i Szwajcaria)
+            c_ata = (cfg.get('ATA_CARNET', 166) if target_city in ["Londyn", "Genewa", "Liverpool", "Manchester"] else 0)
+            c_ferry = (cfg.get('Ferry_UK', 450) if any(x in target_city for x in ["Londyn", "Liverpool", "Manchester"]) else 0)
+            
+            total = c_exp + c_imp + c_stay + c_park + c_ata + c_ferry
+            
+            final_results.append({
+                "v": v_name, "qty": count, "total": total, "tr": tr,
+                "util": min(100, (weight_brutto / (count * v_cap)) * 100),
+                "brk": {
+                    "Eksport": c_exp, "Import": c_imp, "Postój": c_stay, 
+                    "Parking/Hotel": c_park, "Karnet ATA": c_ata, "Promy": c_ferry
+                }
+            })
+
+# --- 9. WIDOK GŁÓWNY ---
 if st.session_state.current_user == "admin":
     tab_calc, tab_admin = st.tabs(["🚀 KALKULATOR", "⚙️ ADMIN TOOL"])
 else:
-    tab_calc = st.container()
-    tab_admin = None
+    tab_calc, tab_admin = st.container(), None
 
-# --- TAB 1: KALKULATOR ---
 with tab_calc:
-    v_types = {"BUS": 1200, "SOLO": 5500, "FTL": 10500}
-    final_results = []
-    
-    if not df_baza.empty:
-        for v_name, v_cap in v_types.items():
-            match = df_baza[(df_baza['Miasto'] == target_city) & (df_baza['Typ_Pojazdu'] == v_name)]
-            if not match.empty:
-                row = match.iloc[0]; count = math.ceil(weight_brutto / v_cap)
-                transit = TRANSIT_DATA.get(target_city, {}).get("BUS" if v_name=="BUS" else "FTL/SOLO", 2)
-                c_exp = row['Eksport'] * (count if mode == "DEDYKOWANY" else (weight_brutto / v_cap))
-                c_imp = (row['Import'] * (count if mode == "DEDYKOWANY" else (weight_brutto / v_cap))) if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else 0
-                c_stay = row['Postoj'] * days_stay * count
-                c_park = (days_stay * cfg.get('PARKING_DAY', 30) * count)
-                c_ata = (cfg.get('ATA_CARNET', 166) if target_city in ["Londyn", "Genewa", "Liverpool", "Manchester"] else 0)
-                c_ferry = (cfg.get('Ferry_UK', 450) if any(x in target_city for x in ["Londyn", "Liverpool", "Manchester"]) else 0)
-                total = c_exp + c_imp + c_stay + c_park + c_ata + c_ferry
-                final_results.append({
-                    "v": v_name, "qty": count, "total": total, "tr": transit,
-                    "util": min(100, (weight_brutto / (count * v_cap)) * 100),
-                    "brk": {"Eksport": c_exp, "Import": c_imp, "Postój": c_stay, "Inne": c_park + c_ata + c_ferry}
-                })
-
     if final_results:
         best = min(final_results, key=lambda x: x['total'])
         dep_date = date_start - timedelta(days=best['tr'] + 1)
+        
         st.markdown(f'<div class="route-header">KOMORNIKI ➔ {target_city.upper()}</div>', unsafe_allow_html=True)
-        col_main, col_map = st.columns([1.8, 1])
-        with col_main:
-            br_items = "".join([f"<div class='breakdown-item'>{k}: <b>€ {v:,.0f}</b></div>" for k, v in best['brk'].items() if v > 0])
+        
+        c_left, c_right = st.columns([1.8, 1])
+        
+        with c_left:
+            # Budowanie rozbicia kosztów (tylko te, które są > 0)
+            costs_html = "".join([f"<div class='cost-item'>{k}<b>€ {v:,.0f}</b></div>" for k, v in best['brk'].items() if v > 0])
+            
             st.markdown(f"""
                 <div class="hero-card">
-                    <div style="color:#ed8936; font-size:14px; font-weight:800; letter-spacing:1px;">KOSZT SZACUNKOWY NETTO</div>
+                    <div style="color:#ed8936; font-size:13px; font-weight:800; letter-spacing:1px;">KOSZT SZACUNKOWY NETTO</div>
                     <div class="main-price-value">€ {best['total']:,.2f}</div>
-                    <div class="breakdown-container">{br_items}</div>
-                    <div style="display:flex; gap:15px; justify-content: flex-start;">
-                        <div class="stat-box"><div class="stat-label">Tranzyt</div><div class="stat-value">{best['tr']} Dni</div></div>
-                        <div class="stat-box"><div class="stat-label">Pobyt</div><div class="stat-value">{days_stay} Dni</div></div>
-                        <div class="stat-box"><div class="stat-label">Pojazd</div><div class="stat-value">{best['v']}</div></div>
-                        <div class="stat-box"><div class="stat-label">Ładunek</div><div class="stat-value">{best['util']:.0f}%</div></div>
+                    <div class="breakdown-grid">{costs_html}</div>
+                    <div class="stat-container">
+                        <div class="stat-pill">🚛 {best['v']} x{best['qty']}</div>
+                        <div class="stat-pill">⏱️ TRANZYT: {best['tr']} DNI</div>
+                        <div class="stat-pill">📦 ŁADUNEK: {best['util']:.0f}%</div>
+                        <div class="stat-pill">📅 WYJAZD: {dep_date.strftime('%d.%m')}</div>
                     </div>
                 </div>
             """, unsafe_allow_html=True)
-            st.markdown("### 📊 ANALIZA PORÓWNAWCZA")
+            
+            st.markdown("### 📊 ANALIZA POZOSTAŁYCH OPCJI")
             for res in sorted(final_results, key=lambda x: x['total']):
                 is_win = "alt-best" if res['v'] == best['v'] else ""
-                st.markdown(f'<div class="alt-card {is_win}"><div><b>{res["v"]}</b> ({res["qty"]} szt. | ładunek {res["util"]:.0f}%)</div><div class="price-tag">€ {res["total"]:,.2f}</div></div>', unsafe_allow_html=True)
-        with col_map:
+                st.markdown(f'<div class="alt-card {is_win}"><div><b>{res["v"]}</b> ({res["qty"]} szt. | utylizacja {res["util"]:.0f}%)</div><div class="price-tag">€ {res["total"]:,.2f}</div></div>', unsafe_allow_html=True)
+        
+        with c_right:
             s_c, e_c = CITY_COORDS["Komorniki (Baza)"], CITY_COORDS.get(target_city, [52, 13])
-            st.pydeck_chart(pdk.Deck(map_provider="carto", map_style="light", initial_view_state=pdk.ViewState(latitude=(s_c[0]+e_c[0])/2, longitude=(s_c[1]+e_c[1])/2, zoom=4),
+            st.pydeck_chart(pdk.Deck(map_provider="carto", map_style="light", 
+                initial_view_state=pdk.ViewState(latitude=(s_c[0]+e_c[0])/2, longitude=(s_c[1]+e_c[1])/2, zoom=4),
                 layers=[pdk.Layer("ArcLayer", data=pd.DataFrame([{"s": [s_c[1], s_c[0]], "e": [e_c[1], e_c[0]]}]), get_source_position="s", get_target_position="e", get_source_color=[237, 137, 54], get_width=5)]))
-            st.warning(f"🚛 SUGEROWANA DATA WYJAZDU: {dep_date.strftime('%Y-%m-%d')}")
+            st.warning(f"Zalecany wyjazd z bazy: **{dep_date.strftime('%Y-%m-%d')}** (Biorąc pod uwagę {best['tr']} dni tranzytu + 1 dzień zapasu).")
 
-# --- TAB 2: ADMIN TOOL ---
+# --- TAB 2: ADMIN ---
 if tab_admin is not None:
     with tab_admin:
-        st.header("⚙️ PANEL ADMINISTRATORA")
-        with st.expander("🔐 GENERATOR UŻYTKOWNIKÓW"):
-            c1, c2 = st.columns(2)
-            gen_u, gen_p = c1.text_input("Login"), c2.text_input("Hasło", type="password")
-            if gen_u and gen_p: st.code(f"Konto: {gen_u} | Hash: {make_hash(gen_p)}")
+        st.header("⚙️ Zarządzanie SQM VENTAGE")
         st.dataframe(df_baza, use_container_width=True)
-        st.link_button("📂 EDYTUJ BAZĘ DANYCH", f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit")
-        if st.button("🔄 SYNCHRONIZUJ TERAZ"): st.cache_data.clear(); st.rerun()
+        st.link_button("📂 EDYTUJ GOOGLE SHEETS", f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit")
+        if st.button("🔄 SYNCHRONIZUJ DANE"): st.cache_data.clear(); st.rerun()
