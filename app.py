@@ -227,7 +227,7 @@ if not df_baza.empty:
                 "util": min(100, (weight_brutto / (count * v_cap)) * 100),
                 "brk": {
                     "Eksport": c_exp, "Import": c_imp, "Postój": c_stay, 
-                    "Parking/Hotel": c_park, "Karnet ATA": c_ata, "Promy": c_ferry
+                    "Parkingi strzeżone": c_park, "Karnet ATA": c_ata, "Promy": c_ferry
                 }
             })
 
