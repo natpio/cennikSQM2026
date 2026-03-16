@@ -13,6 +13,7 @@ URL_BAZA = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:c
 URL_OPLATY = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=OPLATY_STALE"
 URL_USERS = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=USERS"
 
+# Słownik czasów tranzytu
 TRANSIT_DATA = {
     "Berlin": {"BUS": 1, "FTL/SOLO": 1}, "Gdańsk": {"BUS": 1, "FTL/SOLO": 1},
     "Hamburg": {"BUS": 1, "FTL/SOLO": 1}, "Hannover": {"BUS": 1, "FTL/SOLO": 1},
@@ -33,6 +34,7 @@ TRANSIT_DATA = {
     "Madryt": {"BUS": 3, "FTL/SOLO": 4}, "Sewilla": {"BUS": 3, "FTL/SOLO": 5}
 }
 
+# Precyzyjne współrzędne miast
 CITY_COORDS = {
     "Komorniki (Baza)": [52.3358, 16.8122], "Amsterdam": [52.3702, 4.8952], 
     "Barcelona": [41.3851, 2.1734], "Bazylea": [47.5596, 7.5886], "Berlin": [52.5200, 13.4050],
@@ -48,9 +50,9 @@ CITY_COORDS = {
     "Tuluza": [43.6047, 1.4442], "Warszawa": [52.2297, 21.0122], "Wiedeń": [48.2082, 16.3738]
 }
 
-st.set_page_config(page_title="SQM VENTAGE v5.1.2", layout="wide")
+st.set_page_config(page_title="SQM VENTAGE v5.1.4", layout="wide")
 
-# --- CSS ---
+# --- CSS PEŁNY ---
 st.markdown("""
     <style>
     .stApp { background-color: #05070a !important; }
@@ -133,7 +135,6 @@ if not st.session_state.authenticated:
             users = load_users()
             if u_in in users and users[u_in] == make_hash(p_in):
                 st.session_state.authenticated = True
-                st.session_state.current_user = u_in
                 st.rerun()
             else:
                 st.error("Błędne dane logowania")
@@ -157,15 +158,15 @@ cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc'])) if not df_oplaty.em
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.markdown('<div class="brand-container"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div><div class="brand-ver">SYSTEM LOGISTYCZNY VER. 5.1.2</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="brand-container"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div><div class="brand-ver">SYSTEM LOGISTYCZNY VER. 5.1.4</div></div>', unsafe_allow_html=True)
     st.markdown("### 🚛 PARAMETRY")
     trip_type = st.radio("KIERUNEK", ["PEŁNA TRASA (EXP+IMP)", "TYLKO DOSTAWA (ONE-WAY)"])
     mode = st.radio("STRATEGIA", ["DEDYKOWANY", "DOŁADUNEK"])
     target = st.selectbox("CEL PODRÓŻY", sorted(TRANSIT_DATA.keys()))
     
-    base_weight = st.number_input("WAGA PROJEKTU GŁÓWNEGO", value=1000, step=100)
+    base_weight = st.number_input("WAGA PROJEKTU GŁÓWNEGO (KG)", value=1000, step=100)
     real_weight = base_weight * 1.20
-    st.markdown(f'<div class="weight-info">WAGA PROJEKTU + AKCESORIA: {real_weight:,.0f} KG</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="weight-info">WAGA Z AKCESORIAMI: {real_weight:,.0f} KG</div>', unsafe_allow_html=True)
     
     st.markdown("### 📅 TERMINARZ")
     d_start = st.date_input("PIERWSZY DZIEŃ MONTAŻU", datetime.now() + timedelta(days=5))
@@ -209,7 +210,7 @@ if not df_baza.empty:
                 "parking": park_v, "ata": ata_v, "ferry": ferry_v
             })
 
-# --- WIDOK ---
+# --- WIDOK GŁÓWNY ---
 if results:
     best = min(results, key=lambda x: x['Total'])
     suggested_departure = d_start - timedelta(days=best['transit'] + 1)
@@ -232,7 +233,7 @@ if results:
                 <div style='color:#ed8936; font-size:14px; font-weight:800;'>KOSZT SZACUNKOWY NETTO</div>
                 <div class="main-price-value">€ {best['Total']:,.2f}</div>
                 <div class="breakdown-container">{breakdown_html}</div>
-                <div style='display:grid; grid-template-columns: repeat(4, 1fr); gap:15px;'>
+                <div style='display:grid; grid-template-columns: repeat(4, 1fr); gap:15px; margin-top:20px;'>
                     <div style='background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; text-align:center;'>
                         <div style='color:#94a3b8; font-size:10px; font-weight:700;'>TRANZYT</div><div style='color:white; font-size:20px; font-weight:900;'>{best['transit']} dni</div>
                     </div>
@@ -260,42 +261,41 @@ if results:
             """, unsafe_allow_html=True)
 
     with cr:
-        # MAPA Z LINIĄ TRASY
-        start_coord = CITY_COORDS["Komorniki (Baza)"]
-        end_coord = CITY_COORDS.get(target, [48.8566, 2.3522])
+        # KONFIGURACJA MAPY BEZ TOKENA (CARTO)
+        s_c = CITY_COORDS["Komorniki (Baza)"]
+        e_c = CITY_COORDS.get(target, [52.5200, 13.4050])
         
-        arc_data = pd.DataFrame([{
-            "source": [start_coord[1], start_coord[0]],
-            "target": [end_coord[1], end_coord[0]]
-        }])
+        arc_data = pd.DataFrame([{"s": [s_c[1], s_c[0]], "t": [e_c[1], e_c[0]]}])
 
         st.pydeck_chart(pdk.Deck(
-            map_style='mapbox://styles/mapbox/dark-v10',
+            map_provider="carto",
+            map_style="light",
             initial_view_state=pdk.ViewState(
-                latitude=(start_coord[0] + end_coord[0]) / 2,
-                longitude=(start_coord[1] + end_coord[1]) / 2,
-                zoom=4, pitch=40
+                latitude=(s_c[0] + e_c[0]) / 2,
+                longitude=(s_c[1] + e_c[1]) / 2,
+                zoom=4, pitch=0
             ),
             layers=[
                 pdk.Layer(
                     "ArcLayer",
                     data=arc_data,
-                    get_source_position="source",
-                    get_target_position="target",
+                    get_source_position="s",
+                    get_target_position="t",
                     get_source_color=[237, 137, 54, 255],
-                    get_target_color=[255, 255, 255, 100],
-                    get_width=4,
+                    get_target_color=[0, 0, 0, 150],
+                    get_width=5,
                 ),
                 pdk.Layer(
                     "ScatterplotLayer",
                     data=pd.DataFrame([
-                        {"pos": [start_coord[1], start_coord[0]], "color": [237, 137, 54]},
-                        {"pos": [end_coord[1], end_coord[0]], "color": [255, 255, 255]}
+                        {"p": [s_c[1], s_c[0]], "c": [237, 137, 54]},
+                        {"p": [e_c[1], e_c[0]], "c": [0, 0, 0]}
                     ]),
-                    get_position="pos",
-                    get_color="color",
-                    get_radius=25000,
+                    get_position="p",
+                    get_color="c",
+                    get_radius=35000,
                 )
             ]
         ))
         st.warning(f"🚚 **SUGEROWANA DATA WYJAZDU: {suggested_departure.strftime('%Y-%m-%d')}**")
+        st.info(f"Oparto na {best['transit']} dniach tranzytu i 1 dniu zapasu.")
