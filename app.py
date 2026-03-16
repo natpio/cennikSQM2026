@@ -51,18 +51,17 @@ CITY_COORDS = {
 # --- 2. KONFIGURACJA STRONY ---
 st.set_page_config(page_title="SQM VENTAGE v5.2.8", layout="wide", initial_sidebar_state="expanded")
 
-# --- 3. STYLE CSS (NAPRAWA ZLEWANIA SIĘ TEKSTU) ---
+# --- 3. STYLE CSS ---
 st.markdown("""
     <style>
     .stApp { background-color: #05070a !important; }
     
-    /* SIDEBAR - EKSTREMALNY KONTRAST DLA ETYKIET */
+    /* SIDEBAR */
     [data-testid="stSidebar"] { 
         background-color: #0f172a !important; 
         border-right: 1px solid #334155; 
     }
     
-    /* Wymuszenie koloru białego dla wszystkich tekstów kontrolnych */
     [data-testid="stSidebar"] label, 
     [data-testid="stSidebar"] p,
     [data-testid="stSidebar"] .stMarkdown p,
@@ -73,25 +72,22 @@ st.markdown("""
         opacity: 1 !important;
     }
 
-    /* Naprawa czarnych napisów w radio buttonach */
     [data-testid="stSidebar"] .stRadio label p {
         color: #ffffff !important;
         font-weight: 500 !important;
     }
 
-    /* Naprawa czarnych napisów w inputach (daty, liczby) */
     [data-testid="stSidebar"] input {
         color: #ffffff !important;
         background-color: #1e293b !important;
         -webkit-text-fill-color: #ffffff !important;
     }
 
-    /* GŁÓWNY PANEL - KARTA WYNIKÓW */
+    /* GŁÓWNY PANEL */
     .route-header { font-size: 32px !important; font-weight: 900; color: #ffffff; border-bottom: 4px solid #ed8936; margin-bottom: 30px; padding-bottom: 10px; }
     .hero-card { background: linear-gradient(145deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 24px; padding: 35px; margin-bottom: 30px; }
     .main-price-value { color: #ffffff; font-size: 72px; font-weight: 950; margin: 10px 0; line-height: 1; }
     
-    /* SZCZEGÓŁOWE ROZBICIE KOSZTÓW */
     .breakdown-grid { 
         display: grid; 
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); 
@@ -104,7 +100,6 @@ st.markdown("""
     .cost-item { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
     .cost-item b { color: #ffffff; font-size: 20px; display: block; margin-top: 5px; font-weight: 900; }
     
-    /* BOX PARAMETRÓW NA DOLE */
     .stat-container { display: flex; gap: 15px; margin-top: 20px; }
     .stat-pill { 
         background: rgba(237, 137, 54, 0.15); 
@@ -116,9 +111,25 @@ st.markdown("""
         font-size: 13px;
     }
 
-    .alt-card { background: #0f172a; border-left: 5px solid #334155; padding: 20px 25px; margin-bottom: 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; }
+    /* ANALIZA POZOSTAŁYCH OPCJI - BIAŁA CZCIONKA */
+    .alt-card { 
+        background: #0f172a; 
+        border-left: 5px solid #334155; 
+        padding: 20px 25px; 
+        margin-bottom: 15px; 
+        border-radius: 12px; 
+        display: flex; 
+        justify-content: space-between; 
+        align-items: center;
+        color: #ffffff !important; /* Wymuszenie białego koloru tekstu */
+    }
+    .alt-card b, .alt-card div {
+        color: #ffffff !important;
+    }
     .alt-best { border-left-color: #ed8936; background: rgba(237, 137, 54, 0.05); }
-    .price-tag { color: #ed8936; font-size: 22px; font-weight: 900; }
+    .price-tag { color: #ed8936 !important; font-size: 22px; font-weight: 900; }
+    
+    h3 { color: #ffffff !important; } /* Nagłówek sekcji analizy */
     </style>
 """, unsafe_allow_html=True)
 
@@ -210,13 +221,20 @@ if not df_baza.empty:
             count = math.ceil(weight_brutto / v_cap)
             tr = TRANSIT_DATA.get(target_city, {}).get("BUS" if v_name=="BUS" else "FTL/SOLO", 2)
             
-            # Obliczenia szczegółowe
+            # Obliczenia podstawowe
             c_exp = row['Eksport'] * (count if mode == "DEDYKOWANY" else (weight_brutto / v_cap))
             c_imp = (row['Import'] * (count if mode == "DEDYKOWANY" else (weight_brutto / v_cap))) if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else 0
-            c_stay = row['Postoj'] * days_stay * count
+            
+            # LOGIKA POSTOJU: 0 dla busów wszędzie
+            if v_name == "BUS":
+                c_stay = 0.0
+            else:
+                c_stay = row['Postoj'] * days_stay * count
+                
+            # Parkingi zostają bez zmian (również dla busów)
             c_park = (days_stay * cfg.get('PARKING_DAY', 30) * count)
             
-            # ATA i Promy (tylko UK i Szwajcaria)
+            # ATA i Promy
             c_ata = (cfg.get('ATA_CARNET', 166) if target_city in ["Londyn", "Genewa", "Liverpool", "Manchester"] else 0)
             c_ferry = (cfg.get('Ferry_UK', 450) if any(x in target_city for x in ["Londyn", "Liverpool", "Manchester"]) else 0)
             
@@ -247,7 +265,6 @@ with tab_calc:
         c_left, c_right = st.columns([1.8, 1])
         
         with c_left:
-            # Budowanie rozbicia kosztów (tylko te, które są > 0)
             costs_html = "".join([f"<div class='cost-item'>{k}<b>€ {v:,.0f}</b></div>" for k, v in best['brk'].items() if v > 0])
             
             st.markdown(f"""
@@ -267,7 +284,12 @@ with tab_calc:
             st.markdown("### 📊 ANALIZA POZOSTAŁYCH OPCJI")
             for res in sorted(final_results, key=lambda x: x['total']):
                 is_win = "alt-best" if res['v'] == best['v'] else ""
-                st.markdown(f'<div class="alt-card {is_win}"><div><b>{res["v"]}</b> ({res["qty"]} szt. | utylizacja {res["util"]:.0f}%)</div><div class="price-tag">€ {res["total"]:,.2f}</div></div>', unsafe_allow_html=True)
+                st.markdown(f"""
+                    <div class="alt-card {is_win}">
+                        <div><b>{res['v']}</b> ({res['qty']} szt. | utylizacja {res['util']:.0f}%)</div>
+                        <div class="price-tag">€ {res['total']:,.2f}</div>
+                    </div>
+                """, unsafe_allow_html=True)
         
         with c_right:
             s_c, e_c = CITY_COORDS["Komorniki (Baza)"], CITY_COORDS.get(target_city, [52, 13])
