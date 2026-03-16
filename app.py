@@ -33,25 +33,36 @@ TRANSIT_DATA = {
     "Madryt": {"BUS": 3, "FTL/SOLO": 4}, "Sewilla": {"BUS": 3, "FTL/SOLO": 5}
 }
 
+# KOMPLETNE WSPÓŁRZĘDNE DLA WSZYSTKICH MIAST Z LISTY
 CITY_COORDS = {
-    "Komorniki (Baza)": [52.3358, 16.8122], "Amsterdam": [52.3702, 4.8952], 
-    "Berlin": [52.5200, 13.4050], "Londyn": [51.5074, -0.1276],
-    "Paryż": [48.8566, 2.3522], "Wiedeń": [48.2082, 16.3738], 
-    "Praga": [50.0755, 14.4378], "Genewa": [46.2044, 6.1432], 
-    "Barcelona": [41.3851, 2.1734], "Monachium": [48.1351, 11.5820], 
-    "Madryt": [40.4168, -3.7038], "Lizbona": [38.7223, -9.1393],
-    "Rzym": [41.9028, 12.4964], "Sztokholm": [59.3293, 18.0686]
+    "Komorniki (Baza)": [52.3358, 16.8122],
+    "Amsterdam": [52.3702, 4.8952], "Barcelona": [41.3851, 2.1734],
+    "Bazylea": [47.5596, 7.5886], "Berlin": [52.5200, 13.4050],
+    "Bruksela": [50.8503, 4.3517], "Budapeszt": [47.4979, 19.0402],
+    "Cannes / Nicea": [43.5528, 7.0174], "Frankfurt nad Menem": [50.1109, 8.6821],
+    "Gdańsk": [54.3520, 18.6466], "Genewa": [46.2044, 6.1432],
+    "Hamburg": [53.5511, 9.9937], "Hannover": [52.3759, 9.7320],
+    "Kielce": [50.8660, 20.6286], "Kolonia / Dusseldorf": [51.2277, 6.7735],
+    "Kopenhaga": [55.6761, 12.5683], "Lipsk": [51.3397, 12.3731],
+    "Liverpool": [53.4084, -2.9916], "Lizbona": [38.7223, -9.1393],
+    "Londyn": [51.5074, -0.1276], "Lyon": [45.7640, 4.8357],
+    "Madryt": [40.4168, -3.7038], "Manchester": [53.4808, -2.2426],
+    "Mediolan": [45.4642, 9.1900], "Monachium": [48.1351, 11.5820],
+    "Norymberga": [49.4521, 11.0767], "Paryż": [48.8566, 2.3522],
+    "Praga": [50.0755, 14.4378], "Rzym": [41.9028, 12.4964],
+    "Sewilla": [37.3891, -5.9845], "Sofia": [42.6977, 23.3219],
+    "Sztokholm": [59.3293, 18.0686], "Tuluza": [43.6047, 1.4442],
+    "Warszawa": [52.2297, 21.0122], "Wiedeń": [48.2082, 16.3738]
 }
 
-st.set_page_config(page_title="SQM VENTAGE v5.0.8", layout="wide")
+st.set_page_config(page_title="SQM VENTAGE v5.1.0", layout="wide")
 
-# --- CSS Z FIXEM DLA SIDEBARA ---
+# --- CSS ---
 st.markdown("""
     <style>
     .stApp { background-color: #05070a !important; }
     [data-testid="stSidebar"] { background-color: #0f172a !important; border-right: 1px solid #1e293b; }
 
-    /* Fix dla pól wprowadzania danych */
     div[data-baseweb="select"] > div, 
     div[data-baseweb="input"] > div,
     .stNumberInput div[data-baseweb="input"],
@@ -61,12 +72,8 @@ st.markdown("""
         border: 1px solid #334155 !important;
     }
     
-    input {
-        color: #ffffff !important;
-        -webkit-text-fill-color: #ffffff !important;
-    }
+    input { color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; }
 
-    /* Wyświetlanie wagi przeliczonej */
     .weight-info {
         background: rgba(237, 137, 54, 0.1);
         border: 1px solid #ed8936;
@@ -79,25 +86,30 @@ st.markdown("""
         margin-bottom: 15px;
     }
 
-    /* Branding */
     .brand-container { padding: 10px 0 20px 0; text-align: center; border-bottom: 1px solid #1e293b; margin-bottom: 20px; }
     .brand-logo { font-family: 'Inter', sans-serif; font-size: 20px; font-weight: 900; color: #ffffff; display: flex; align-items: center; justify-content: center; gap: 10px; }
     .brand-v { background: #ed8936; color: #000; padding: 2px 8px; border-radius: 4px; font-style: italic; }
     .brand-ver { font-size: 10px; color: #94a3b8 !important; margin-top: 5px; }
 
-    /* UI Layout */
     .route-header { font-size: 30px !important; font-weight: 900; color: #ffffff; border-bottom: 3px solid #ed8936; margin-bottom: 25px; padding-bottom: 10px; }
     .hero-card { background: linear-gradient(145deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 20px; padding: 30px; margin-bottom: 30px; }
     .main-price-value { color: #ffffff; font-size: 64px; font-weight: 950; line-height: 1.1; margin: 15px 0; }
-    .breakdown-container { display: flex; flex-wrap: wrap; gap: 20px; margin: 20px 0; padding: 15px 0; border-top: 1px solid rgba(255,255,255,0.1); border-bottom: 1px solid rgba(255,255,255,0.1); }
-    .breakdown-item { font-size: 14px; color: #94a3b8; }
-    .breakdown-item b { color: #ffffff; font-size: 16px; }
+    
+    .breakdown-container { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); 
+        gap: 15px; 
+        margin: 20px 0; 
+        padding: 20px 0; 
+        border-top: 1px solid rgba(255,255,255,0.1); 
+        border-bottom: 1px solid rgba(255,255,255,0.1); 
+    }
+    .breakdown-item { font-size: 13px; color: #94a3b8; display: flex; flex-direction: column; }
+    .breakdown-item b { color: #ffffff; font-size: 16px; margin-top: 4px; }
 
     .alt-card { background: #0f172a; border-left: 5px solid #475569; padding: 18px 25px; margin-bottom: 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
     .alt-best { border-left-color: #ed8936; background: rgba(237, 137, 54, 0.1); }
     .price-tag { color: #ed8936; font-size: 20px; font-weight: 900; }
-    
-    [data-testid="stSidebar"] label p { color: #94a3b8 !important; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -132,7 +144,7 @@ if not st.session_state.authenticated:
                 st.error("Błędne dane logowania")
     st.stop()
 
-# --- DANE ---
+# --- POBIERANIE DANYCH ---
 @st.cache_data(ttl=60)
 def fetch_data():
     try:
@@ -150,16 +162,14 @@ cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc'])) if not df_oplaty.em
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.markdown('<div class="brand-container"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div><div class="brand-ver">SYSTEM LOGISTYCZNY VER. 5.0.8</div></div>', unsafe_allow_html=True)
-    
+    st.markdown('<div class="brand-container"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div><div class="brand-ver">SYSTEM LOGISTYCZNY VER. 5.1.0</div></div>', unsafe_allow_html=True)
     st.markdown("### 🚛 PARAMETRY")
     trip_type = st.radio("KIERUNEK", ["PEŁNA TRASA (EXP+IMP)", "TYLKO DOSTAWA (ONE-WAY)"])
     mode = st.radio("STRATEGIA", ["DEDYKOWANY", "DOŁADUNEK"])
     target = st.selectbox("CEL PODRÓŻY", sorted(TRANSIT_DATA.keys()))
     
-    # NOWA LOGIKA WAGI
     base_weight = st.number_input("WAGA PROJEKTU GŁÓWNEGO", value=1000, step=100)
-    real_weight = base_weight * 1.20 # Doliczenie 20%
+    real_weight = base_weight * 1.20
     st.markdown(f'<div class="weight-info">WAGA PROJEKTU + AKCESORIA: {real_weight:,.0f} KG</div>', unsafe_allow_html=True)
     
     st.markdown("### 📅 TERMINARZ")
@@ -172,7 +182,7 @@ with st.sidebar:
     if st.button("🚪 WYLOGUJ", use_container_width=True):
         st.session_state.authenticated = False; st.rerun()
 
-# --- OBLICZENIA NA PODSTAWIE WAGI REALNEJ ---
+# --- OBLICZENIA ---
 caps = {"BUS": 1200, "SOLO": 5500, "FTL": 10500}
 results = []
 
@@ -180,23 +190,25 @@ if not df_baza.empty:
     for v_type, cap in caps.items():
         res = df_baza[(df_baza['Miasto'] == target) & (df_baza['Typ_Pojazdu'] == v_type)]
         if not res.empty:
-            r = res.mean(numeric_only=True)
-            v_count = math.ceil(real_weight / cap) # Użycie wagi z akcesoriami
+            r = res.iloc[0]
+            v_count = math.ceil(real_weight / cap)
             transit = TRANSIT_DATA.get(target, {}).get("BUS" if v_type=="BUS" else "FTL/SOLO", 2)
             
             exp_v = (r['Eksport'] * v_count if mode == "DEDYKOWANY" else r['Eksport'] * (real_weight/cap))
             imp_v = (r['Import'] * v_count if mode == "DEDYKOWANY" else r['Import'] * (real_weight/cap)) if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else 0
             
-            ata = (cfg.get('ATA_CARNET', 166) if target in ["Londyn", "Genewa", "Liverpool", "Manchester"] else 0)
-            ferry = (cfg.get('Ferry_UK', 450) if any(x in target for x in ["Londyn", "Liverpool", "Manchester"]) else 0)
-            park = (days_stay * cfg.get('PARKING_DAY', 30) * v_count)
-            stay_v = r['Postoj'] * days_stay * v_count
+            daily_stay_rate = r['Postoj']
+            stay_v = daily_stay_rate * days_stay * v_count
+            park_v = (days_stay * cfg.get('PARKING_DAY', 30) * v_count)
             
-            total = exp_v + imp_v + stay_v + park + ata + ferry
+            ata_v = (cfg.get('ATA_CARNET', 166) if target in ["Londyn", "Genewa", "Liverpool", "Manchester"] else 0)
+            ferry_v = (cfg.get('Ferry_UK', 450) if any(x in target for x in ["Londyn", "Liverpool", "Manchester"]) else 0)
+            
+            total = exp_v + imp_v + stay_v + park_v + ata_v + ferry_v
             results.append({
                 "Pojazd": v_type, "Szt": v_count, "Total": total, "transit": transit, 
                 "load": min(100, (real_weight/(v_count*cap))*100), "exp": exp_v, "imp": imp_v, 
-                "stay": stay_v, "fees": ata + ferry + park
+                "stay": stay_v, "stay_rate": daily_stay_rate, "parking": park_v, "ata": ata_v, "ferry": ferry_v
             })
 
 # --- WIDOK ---
@@ -208,34 +220,32 @@ if results:
     
     cl, cr = st.columns([1.8, 1])
     with cl:
-        imp_val = f'<div class="breakdown-item">Import: <b>€ {best["imp"]:,.0f}</b></div>' if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else ""
-        
+        # Transparentny breakdown kosztów
+        breakdown_html = f"""<div class="breakdown-item">Eksport: <b>€ {best['exp']:,.0f}</b></div>"""
+        if trip_type != "TYLKO DOSTAWA (ONE-WAY)":
+            breakdown_html += f"""<div class="breakdown-item">Import: <b>€ {best['imp']:,.0f}</b></div>"""
+        breakdown_html += f"""<div class="breakdown-item">Postój ({days_stay} dni x €{best['stay_rate']:,.0f}): <b>€ {best['stay']:,.0f}</b></div>"""
+        if best['parking'] > 0: breakdown_html += f"""<div class="breakdown-item">Parking (baza/hotel): <b>€ {best['parking']:,.0f}</b></div>"""
+        if best['ata'] > 0: breakdown_html += f"""<div class="breakdown-item">Karnet ATA / Odprawa: <b>€ {best['ata']:,.0f}</b></div>"""
+        if best['ferry'] > 0: breakdown_html += f"""<div class="breakdown-item">Przeprawa promowa: <b>€ {best['ferry']:,.0f}</b></div>"""
+
         st.markdown(f"""
             <div class="hero-card">
                 <div style='color:#ed8936; font-size:14px; font-weight:800;'>KOSZT SZACUNKOWY NETTO</div>
                 <div class="main-price-value">€ {best['Total']:,.2f}</div>
-                <div class="breakdown-container">
-                    <div class="breakdown-item">Eksport: <b>€ {best['exp']:,.0f}</b></div>
-                    {imp_val}
-                    <div class="breakdown-item">Postój (montaż): <b>€ {best['stay']:,.0f}</b></div>
-                    <div class="breakdown-item">Opłaty dodatkowe: <b>€ {best['fees']:,.0f}</b></div>
-                </div>
+                <div class="breakdown-container">{breakdown_html}</div>
                 <div style='display:grid; grid-template-columns: repeat(4, 1fr); gap:15px;'>
                     <div style='background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; text-align:center;'>
-                        <div style='color:#94a3b8; font-size:10px; font-weight:700;'>TRANZYT</div>
-                        <div style='color:white; font-size:20px; font-weight:900;'>{best['transit']} dni</div>
+                        <div style='color:#94a3b8; font-size:10px; font-weight:700;'>TRANZYT</div><div style='color:white; font-size:20px; font-weight:900;'>{best['transit']} dni</div>
                     </div>
                     <div style='background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; text-align:center;'>
-                        <div style='color:#94a3b8; font-size:10px; font-weight:700;'>TARGI</div>
-                        <div style='color:white; font-size:20px; font-weight:900;'>{days_stay} dni</div>
+                        <div style='color:#94a3b8; font-size:10px; font-weight:700;'>TARGI</div><div style='color:white; font-size:20px; font-weight:900;'>{days_stay} dni</div>
                     </div>
                     <div style='background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; text-align:center;'>
-                        <div style='color:#94a3b8; font-size:10px; font-weight:700;'>AUTO</div>
-                        <div style='color:white; font-size:20px; font-weight:900;'>{best['Pojazd']}</div>
+                        <div style='color:#94a3b8; font-size:10px; font-weight:700;'>AUTO</div><div style='color:white; font-size:20px; font-weight:900;'>{best['Pojazd']}</div>
                     </div>
                     <div style='background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; text-align:center;'>
-                        <div style='color:#94a3b8; font-size:10px; font-weight:700;'>ŁADUNEK</div>
-                        <div style='color:white; font-size:20px; font-weight:900;'>{best['load']:.0f}%</div>
+                        <div style='color:#94a3b8; font-size:10px; font-weight:700;'>ŁADUNEK</div><div style='color:white; font-size:20px; font-weight:900;'>{best['load']:.0f}%</div>
                     </div>
                 </div>
             </div>
@@ -252,7 +262,16 @@ if results:
             """, unsafe_allow_html=True)
 
     with cr:
-        b_pos, d_pos = CITY_COORDS["Komorniki (Baza)"], CITY_COORDS.get(target, [48.8, 2.3])
-        st.map(pd.DataFrame({'lat': np.linspace(b_pos[0], d_pos[0], 25), 'lon': np.linspace(b_pos[1], d_pos[1], 25)}), color='#ed8936', size=15)
+        # FIX MAPY: Pobieranie precyzyjnych współrzędnych
+        b_pos = CITY_COORDS["Komorniki (Baza)"]
+        d_pos = CITY_COORDS.get(target, [48.8566, 2.3522]) # Teraz d_pos zawsze będzie poprawne
+        
+        # Tworzenie punktów trasy
+        map_data = pd.DataFrame([
+            {'lat': b_pos[0], 'lon': b_pos[1], 'name': 'Baza'},
+            {'lat': d_pos[0], 'lon': d_pos[1], 'name': target}
+        ])
+        
+        st.map(map_data, color='#ed8936', size=20)
         st.warning(f"🚚 **SUGEROWANA DATA WYJAZDU: {suggested_departure.strftime('%Y-%m-%d')}**")
         st.info(f"Wyliczenie: {best['transit']} dni drogi + 1 dzień zapasu przed montażem ({d_start}).")
