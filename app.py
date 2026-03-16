@@ -8,13 +8,11 @@ import numpy as np
 import pydeck as pdk
 
 # --- 1. KONFIGURACJA ZASOBÓW (GOOGLE SHEETS) ---
-# Identyfikator arkusza SQM Multimedia Solutions
 SHEET_ID = "1sYlXP6WVzPE09qfmydQYQNsjiZcDgRSJGyWoXfjmkDY"
 URL_BAZA = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=CENNIK_BAZA"
 URL_OPLATY = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=OPLATY_STALE"
 URL_USERS = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=USERS"
 
-# Pełna mapa tranzytów (Dni robocze) - kluczowe dla planowania logistyki targowej
 TRANSIT_DATA = {
     "Berlin": {"BUS": 1, "FTL/SOLO": 1}, "Gdańsk": {"BUS": 1, "FTL/SOLO": 1},
     "Hamburg": {"BUS": 1, "FTL/SOLO": 1}, "Hannover": {"BUS": 1, "FTL/SOLO": 1},
@@ -35,7 +33,6 @@ TRANSIT_DATA = {
     "Madryt": {"BUS": 3, "FTL/SOLO": 4}, "Sewilla": {"BUS": 3, "FTL/SOLO": 5}
 }
 
-# Koordynaty GPS dla wizualizacji mapy PyDeck
 CITY_COORDS = {
     "Komorniki (Baza)": [52.3358, 16.8122], "Amsterdam": [52.3702, 4.8952], 
     "Barcelona": [41.3851, 2.1734], "Bazylea": [47.5596, 7.5886], "Berlin": [52.5200, 13.4050],
@@ -52,51 +49,66 @@ CITY_COORDS = {
 }
 
 # --- 2. KONFIGURACJA STRONY ---
-st.set_page_config(page_title="SQM VENTAGE v5.2.5", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="SQM VENTAGE v5.2.6", layout="wide", initial_sidebar_state="expanded")
 
-# --- 3. STYLE CSS (PEŁNA PERSONALIZACJA) ---
+# --- 3. STYLE CSS (FIX DLA KONTRASTU) ---
 st.markdown("""
     <style>
-    /* Globalny styl tła aplikacji */
     .stApp { background-color: #05070a !important; }
     
-    /* STYLIZACJA PASKA BOCZNEGO (SIDEBAR) */
+    /* SIDEBAR - EKSTREMALNY KONTRAST */
     [data-testid="stSidebar"] { 
         background-color: #0f172a !important; 
-        border-right: 1px solid #1e293b; 
+        border-right: 1px solid #334155; 
     }
     
-    /* Wymuszenie BIAŁEJ CZCIONKI w Sidebarze */
-    [data-testid="stSidebar"] .stMarkdown p, 
+    /* Wymuszenie koloru dla etykiet i podtytułów w sidebarze */
     [data-testid="stSidebar"] label, 
-    [data-testid="stSidebar"] span,
-    [data-testid="stSidebar"] .stRadio label,
-    [data-testid="stSidebar"] .stNumberInput label,
-    [data-testid="stSidebar"] .stSelectbox label,
-    [data-testid="stSidebar"] .stDateInput label {
+    [data-testid="stSidebar"] .stMarkdown h3, 
+    [data-testid="stSidebar"] .stMarkdown p {
         color: #ffffff !important;
-        font-weight: 500 !important;
+        font-weight: 800 !important;
+        text-transform: uppercase;
+        font-size: 13px !important;
+        letter-spacing: 0.5px;
     }
 
-    /* Branding w Sidebarze */
+    /* Radio buttons w sidebarze */
+    [data-testid="stSidebar"] .stRadio label p {
+        color: #e2e8f0 !important;
+        font-weight: 400 !important;
+        text-transform: none !important;
+    }
+
     .brand-logo { color: #ffffff !important; font-size: 22px; font-weight: 900; }
     .brand-v { background: #ed8936; color: #000 !important; padding: 2px 10px; border-radius: 4px; }
 
-    /* Pola wprowadzania danych (Inputs/Selects) */
+    /* Pola wprowadzania danych */
     div[data-baseweb="select"] > div, div[data-baseweb="input"] > div, 
     .stNumberInput div[data-baseweb="input"], .stDateInput div[data-baseweb="input"] {
-        background-color: #1e293b !important; color: #ffffff !important; border: 1px solid #334155 !important;
+        background-color: #1e293b !important; color: #ffffff !important; border: 1px solid #475569 !important;
     }
-    input { color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; }
     
-    /* GŁÓWNY INTERFEJS UŻYTKOWNIKA */
+    /* GŁÓWNY PANEL */
     .route-header { font-size: 32px !important; font-weight: 900; color: #ffffff; border-bottom: 4px solid #ed8936; margin-bottom: 30px; padding-bottom: 10px; }
     .hero-card { background: linear-gradient(145deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 24px; padding: 35px; margin-bottom: 30px; }
     .main-price-value { color: #ffffff; font-size: 72px; font-weight: 950; margin: 10px 0; line-height: 1; }
     
+    /* Poprawka czytelności parametrów na dole karty */
+    .stat-box {
+        background: rgba(255,255,255,0.07);
+        padding: 12px 20px;
+        border-radius: 12px;
+        border: 1px solid rgba(255,255,255,0.1);
+        text-align: center;
+        min-width: 120px;
+    }
+    .stat-label { color: #94a3b8; font-size: 10px; text-transform: uppercase; font-weight: 700; margin-bottom: 4px; }
+    .stat-value { color: #ffffff; font-size: 18px; font-weight: 900; }
+
     .breakdown-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; margin: 25px 0; padding: 25px 0; border-top: 1px solid rgba(255,255,255,0.1); border-bottom: 1px solid rgba(255,255,255,0.1); }
     .breakdown-item { font-size: 13px; color: #94a3b8; }
-    .breakdown-item b { color: #ffffff; font-size: 17px; display: block; margin-top: 5px; }
+    .breakdown-item b { color: #ffffff; font-size: 18px; display: block; margin-top: 5px; }
     
     .alt-card { background: #0f172a; border-left: 5px solid #334155; padding: 20px 25px; margin-bottom: 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; }
     .alt-best { border-left-color: #ed8936; background: rgba(237, 137, 54, 0.05); }
@@ -104,47 +116,32 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 4. FUNKCJE SYSTEMOWE ---
-def make_hash(password):
-    """Generowanie skrótu SHA-256."""
-    return hashlib.sha256(password.strip().encode()).hexdigest()
+# --- 4. FUNKCJE ---
+def make_hash(password): return hashlib.sha256(password.strip().encode()).hexdigest()
 
 @st.cache_data(ttl=60)
 def fetch_data():
-    """Pobieranie i czyszczenie danych z Google Sheets."""
     try:
-        b = pd.read_csv(URL_BAZA)
-        o = pd.read_csv(URL_OPLATY)
-        b.columns = b.columns.str.strip()
-        o.columns = o.columns.str.strip()
-        
+        b = pd.read_csv(URL_BAZA); o = pd.read_csv(URL_OPLATY)
+        b.columns = b.columns.str.strip(); o.columns = o.columns.str.strip()
         def clean_val(v):
             if pd.isna(v): return 0.0
-            s = re.sub(r'[^\d.]', '', str(v).replace(',', '.'))
-            return float(s) if s else 0.0
-
+            s = re.sub(r'[^\d.]', '', str(v).replace(',', '.')); return float(s) if s else 0.0
         for col in ['Eksport', 'Import', 'Postoj']:
             if col in b.columns: b[col] = b[col].apply(clean_val)
         if 'Wartosc' in o.columns: o['Wartosc'] = o['Wartosc'].apply(clean_val)
-        
         return b, o
-    except:
-        return pd.DataFrame(), pd.DataFrame()
+    except: return pd.DataFrame(), pd.DataFrame()
 
 @st.cache_data(ttl=60)
 def load_users():
-    """Ładowanie autoryzowanych użytkowników."""
     try:
-        df = pd.read_csv(URL_USERS)
-        df.columns = df.columns.str.strip()
+        df = pd.read_csv(URL_USERS); df.columns = df.columns.str.strip()
         return dict(zip(df['username'].astype(str), df['password'].astype(str)))
-    except:
-        # Fallback na admina
-        return {"admin": "f3e99d9459eeb7ffc4cd407d890fbf1db011208fa12d8edc501a7ec26da106a3"}
+    except: return {"admin": "f3e99d9459eeb7ffc4cd407d890fbf1db011208fa12d8edc501a7ec26da106a3"}
 
-# --- 5. OBSŁUGA LOGOWANIA ---
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
+# --- 5. LOGOWANIE ---
+if "authenticated" not in st.session_state: st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
     _, col_log, _ = st.columns([1, 1.2, 1])
@@ -158,31 +155,30 @@ if not st.session_state.authenticated:
                 st.session_state.authenticated = True
                 st.session_state.current_user = u_input
                 st.rerun()
-            else:
-                st.error("Błędny login lub hasło.")
+            else: st.error("Błędny login lub hasło.")
     st.stop()
 
-# --- 6. PRZYGOTOWANIE DANYCH DO OBLICZEŃ ---
+# --- 6. PRZYGOTOWANIE DANYCH ---
 df_baza, df_oplaty = fetch_data()
 cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc'])) if not df_oplaty.empty else {}
 
-# --- 7. SIDEBAR (BIAŁE CZCIONKI DZIĘKI CSS) ---
+# --- 7. SIDEBAR ---
 with st.sidebar:
     st.markdown('<div style="text-align:center; margin-bottom:20px;"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div></div>', unsafe_allow_html=True)
     
-    st.subheader("KONFIGURACJA TRASY")
+    st.subheader("Konfiguracja Trasy")
     trip_type = st.radio("KIERUNEK", ["PEŁNA TRASA (EXP+IMP)", "TYLKO DOSTAWA (ONE-WAY)"])
     mode = st.radio("STRATEGIA", ["DEDYKOWANY", "DOŁADUNEK"])
     target_city = st.selectbox("MIEJSCE DOCELOWE", sorted(TRANSIT_DATA.keys()))
     
     st.markdown("---")
-    st.subheader("PARAMETRY ŁADUNKU")
+    st.subheader("Parametry Ładunku")
     weight_netto = st.number_input("WAGA NETTO (KG)", value=1000, step=100)
-    weight_brutto = weight_netto * 1.20 # Realna waga transportowa (palety/skrzynie)
+    weight_brutto = weight_netto * 1.20
     
     st.markdown(f"""
         <div style="background:rgba(237,137,54,0.1); border:1px solid #ed8936; padding:15px; border-radius:10px; color:#ed8936; text-align:center;">
-            <div style="font-size:10px; opacity:0.8;">SZACUNKOWA WAGA BRUTTO</div>
+            <div style="font-size:10px; opacity:0.8; font-weight:bold;">SZACUNKOWA WAGA BRUTTO</div>
             <div style="font-size:22px; font-weight:900;">{weight_brutto:,.0f} KG</div>
         </div>
     """, unsafe_allow_html=True)
@@ -199,11 +195,10 @@ with st.sidebar:
         st.session_state.clear()
         st.rerun()
 
-# --- 8. LOGIKA WIDOCZNOŚCI PANELU ADMINA ---
+# --- 8. LOGIKA TABS ---
 if st.session_state.current_user == "admin":
     tab_calc, tab_admin = st.tabs(["🚀 KALKULATOR", "⚙️ ADMIN TOOL"])
 else:
-    # Niewidoczne dla innych - kod tab_admin nie zostanie wygenerowany
     tab_calc = st.container()
     tab_admin = None
 
@@ -216,24 +211,15 @@ with tab_calc:
         for v_name, v_cap in v_types.items():
             match = df_baza[(df_baza['Miasto'] == target_city) & (df_baza['Typ_Pojazdu'] == v_name)]
             if not match.empty:
-                row = match.iloc[0]
-                count = math.ceil(weight_brutto / v_cap)
+                row = match.iloc[0]; count = math.ceil(weight_brutto / v_cap)
                 transit = TRANSIT_DATA.get(target_city, {}).get("BUS" if v_name=="BUS" else "FTL/SOLO", 2)
-                
-                # Koszty transportu
                 c_exp = row['Eksport'] * (count if mode == "DEDYKOWANY" else (weight_brutto / v_cap))
                 c_imp = (row['Import'] * (count if mode == "DEDYKOWANY" else (weight_brutto / v_cap))) if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else 0
-                
-                # Postojowe i hotele
                 c_stay = row['Postoj'] * days_stay * count
                 c_park = (days_stay * cfg.get('PARKING_DAY', 30) * count)
-                
-                # Cła i promy
                 c_ata = (cfg.get('ATA_CARNET', 166) if target_city in ["Londyn", "Genewa", "Liverpool", "Manchester"] else 0)
                 c_ferry = (cfg.get('Ferry_UK', 450) if any(x in target_city for x in ["Londyn", "Liverpool", "Manchester"]) else 0)
-                
                 total = c_exp + c_imp + c_stay + c_park + c_ata + c_ferry
-                
                 final_results.append({
                     "v": v_name, "qty": count, "total": total, "tr": transit,
                     "util": min(100, (weight_brutto / (count * v_cap)) * 100),
@@ -243,59 +229,39 @@ with tab_calc:
     if final_results:
         best = min(final_results, key=lambda x: x['total'])
         dep_date = date_start - timedelta(days=best['tr'] + 1)
-        
         st.markdown(f'<div class="route-header">KOMORNIKI ➔ {target_city.upper()}</div>', unsafe_allow_html=True)
-        
         col_main, col_map = st.columns([1.8, 1])
         with col_main:
             br_items = "".join([f"<div class='breakdown-item'>{k}: <b>€ {v:,.0f}</b></div>" for k, v in best['brk'].items() if v > 0])
             st.markdown(f"""
                 <div class="hero-card">
-                    <div style="color:#ed8936; font-size:14px; font-weight:800;">OPTYMALNY WYBÓR: {best['v']} x{best['qty']}</div>
+                    <div style="color:#ed8936; font-size:14px; font-weight:800; letter-spacing:1px;">OPTYMALNY WYBÓR: {best['v']} x{best['qty']}</div>
                     <div class="main-price-value">€ {best['total']:,.2f}</div>
                     <div class="breakdown-container">{br_items}</div>
-                    <div style="display:flex; gap:20px;">
-                        <div><small style='color:#94a3b8'>WYJAZD:</small><br><b>{dep_date.strftime('%d.%m.%Y')}</b></div>
-                        <div><small style='color:#94a3b8'>TRANZYT:</small><br><b>{best['tr']} DNI</b></div>
-                        <div><small style='color:#94a3b8'>WYPEŁNIENIE:</small><br><b>{best['util']:.0f}%</b></div>
+                    <div style="display:flex; gap:15px; justify-content: flex-start;">
+                        <div class="stat-box"><div class="stat-label">Wyjazd</div><div class="stat-value">{dep_date.strftime('%d.%m')}</div></div>
+                        <div class="stat-box"><div class="stat-label">Tranzyt</div><div class="stat-value">{best['tr']} Dni</div></div>
+                        <div class="stat-box"><div class="stat-label">Wypełnienie</div><div class="stat-value">{best['util']:.0f}%</div></div>
                     </div>
                 </div>
             """, unsafe_allow_html=True)
-            
             for res in sorted(final_results, key=lambda x: x['total']):
                 is_win = "alt-best" if res['v'] == best['v'] else ""
                 st.markdown(f'<div class="alt-card {is_win}"><div><b>{res["v"]}</b> ({res["qty"]} szt.)</div><div class="price-tag">€ {res["total"]:,.2f}</div></div>', unsafe_allow_html=True)
-
         with col_map:
-            s_c = CITY_COORDS["Komorniki (Baza)"]
-            e_c = CITY_COORDS.get(target_city, [52, 13])
-            st.pydeck_chart(pdk.Deck(
-                map_provider="carto", map_style="light",
-                initial_view_state=pdk.ViewState(latitude=(s_c[0]+e_c[0])/2, longitude=(s_c[1]+e_c[1])/2, zoom=4),
-                layers=[pdk.Layer("ArcLayer", data=pd.DataFrame([{"s": [s_c[1], s_c[0]], "e": [e_c[1], e_c[0]]}]), get_source_position="s", get_target_position="e", get_source_color=[237, 137, 54], get_width=5)]
-            ))
-            st.warning(f"Zalecany wyjazd z bazy: **{dep_date.strftime('%A, %d %B')}**")
+            s_c, e_c = CITY_COORDS["Komorniki (Baza)"], CITY_COORDS.get(target_city, [52, 13])
+            st.pydeck_chart(pdk.Deck(map_provider="carto", map_style="light", initial_view_state=pdk.ViewState(latitude=(s_c[0]+e_c[0])/2, longitude=(s_c[1]+e_c[1])/2, zoom=4),
+                layers=[pdk.Layer("ArcLayer", data=pd.DataFrame([{"s": [s_c[1], s_c[0]], "e": [e_c[1], e_c[0]]}]), get_source_position="s", get_target_position="e", get_source_color=[237, 137, 54], get_width=5)]))
+            st.warning(f"Sugerowana data wyjazdu: **{dep_date.strftime('%Y-%m-%d')}**")
 
-# --- TAB 2: ADMIN TOOL (CAŁKOWICIE ZABLOKOWANE DLA NIE-ADMINA) ---
+# --- TAB 2: ADMIN TOOL ---
 if tab_admin is not None:
     with tab_admin:
         st.header("⚙️ Zarządzanie SQM VENTAGE")
-        
-        with st.expander("🔐 DODAWANIE NOWEGO UŻYTKOWNIKA", expanded=True):
-            st.write("Skonfiguruj nowe konto do Arkusza Google:")
+        with st.expander("🔐 DODAWANIE UŻYTKOWNIKA", expanded=True):
             c1, c2 = st.columns(2)
-            gen_u = c1.text_input("Login (np. j.kowalski)")
-            gen_p = c2.text_input("Hasło (czysty tekst)", type="password")
-            if gen_u and gen_p:
-                st.code(f"KOLUMNA username: {gen_u}\nKOLUMNA password: {make_hash(gen_p)}")
-                st.info("Kopiuj powyższy hash i wklej do arkusza USERS.")
-
-        st.markdown("---")
-        st.subheader("Baza Cennikowa (Podgląd)")
-        st.dataframe(df_baza, use_container_width=True, height=300)
-        
-        st.link_button("👉 EDYTUJ DANE W GOOGLE SHEETS", f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit")
-        
-        if st.button("🔄 ODSWIEŻ DANE I WYCZYŚĆ CACHE", use_container_width=True):
-            st.cache_data.clear()
-            st.rerun()
+            gen_u, gen_p = c1.text_input("Login"), c2.text_input("Hasło", type="password")
+            if gen_u and gen_p: st.code(f"username: {gen_u}\npassword: {make_hash(gen_p)}")
+        st.dataframe(df_baza, use_container_width=True)
+        st.link_button("👉 EDYTUJ GOOGLE SHEETS", f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit")
+        if st.button("🔄 ODSWIEŻ DANE"): st.cache_data.clear(); st.rerun()
