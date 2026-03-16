@@ -49,52 +49,64 @@ CITY_COORDS = {
 }
 
 # --- 2. KONFIGURACJA STRONY ---
-st.set_page_config(page_title="SQM VENTAGE v5.2.6", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="SQM VENTAGE v5.2.7", layout="wide", initial_sidebar_state="expanded")
 
-# --- 3. STYLE CSS (FIX DLA KONTRASTU) ---
+# --- 3. STYLE CSS (AGRESYWNE WYMUSZANIE BIAŁEGO KOLORU) ---
 st.markdown("""
     <style>
     .stApp { background-color: #05070a !important; }
     
-    /* SIDEBAR - EKSTREMALNY KONTRAST */
+    /* SIDEBAR - GLOBALNE WYMUSZENIE */
     [data-testid="stSidebar"] { 
         background-color: #0f172a !important; 
         border-right: 1px solid #334155; 
     }
     
-    /* Wymuszenie koloru dla etykiet i podtytułów w sidebarze */
+    /* WSZYSTKIE TEKSTY W SIDEBARZE */
+    [data-testid="stSidebar"] *, 
     [data-testid="stSidebar"] label, 
-    [data-testid="stSidebar"] .stMarkdown h3, 
-    [data-testid="stSidebar"] .stMarkdown p {
+    [data-testid="stSidebar"] p, 
+    [data-testid="stSidebar"] span, 
+    [data-testid="stSidebar"] small {
         color: #ffffff !important;
-        font-weight: 800 !important;
-        text-transform: uppercase;
-        font-size: 13px !important;
-        letter-spacing: 0.5px;
+        fill: #ffffff !important;
     }
 
-    /* Radio buttons w sidebarze */
-    [data-testid="stSidebar"] .stRadio label p {
-        color: #e2e8f0 !important;
-        font-weight: 400 !important;
-        text-transform: none !important;
-    }
-
-    .brand-logo { color: #ffffff !important; font-size: 22px; font-weight: 900; }
-    .brand-v { background: #ed8936; color: #000 !important; padding: 2px 10px; border-radius: 4px; }
-
-    /* Pola wprowadzania danych */
-    div[data-baseweb="select"] > div, div[data-baseweb="input"] > div, 
-    .stNumberInput div[data-baseweb="input"], .stDateInput div[data-baseweb="input"] {
-        background-color: #1e293b !important; color: #ffffff !important; border: 1px solid #475569 !important;
+    /* Specyficzne poprawki dla widgetów Streamlit */
+    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {
+        background-color: transparent !important;
     }
     
+    [data-testid="stSidebar"] .stMarkdown h3 {
+        border-bottom: 1px solid #ed8936;
+        padding-bottom: 5px;
+        margin-top: 20px;
+    }
+
+    /* Branding logo */
+    .brand-logo { font-size: 22px; font-weight: 900; color: #ffffff !important; }
+    .brand-v { background: #ed8936; color: #000 !important; padding: 2px 10px; border-radius: 4px; }
+
+    /* Inputy i Selektory - tło i obramowanie */
+    div[data-baseweb="select"] > div, 
+    div[data-baseweb="input"] > div, 
+    div[data-baseweb="base-input"] {
+        background-color: #1e293b !important;
+        border: 1px solid #475569 !important;
+    }
+    
+    /* Tekst wpisywany w pola */
+    input { 
+        color: #ffffff !important; 
+        -webkit-text-fill-color: #ffffff !important; 
+    }
+
     /* GŁÓWNY PANEL */
     .route-header { font-size: 32px !important; font-weight: 900; color: #ffffff; border-bottom: 4px solid #ed8936; margin-bottom: 30px; padding-bottom: 10px; }
     .hero-card { background: linear-gradient(145deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 24px; padding: 35px; margin-bottom: 30px; }
     .main-price-value { color: #ffffff; font-size: 72px; font-weight: 950; margin: 10px 0; line-height: 1; }
     
-    /* Poprawka czytelności parametrów na dole karty */
+    /* Statystyki na dole karty głównej */
     .stat-box {
         background: rgba(255,255,255,0.07);
         padding: 12px 20px;
@@ -103,20 +115,20 @@ st.markdown("""
         text-align: center;
         min-width: 120px;
     }
-    .stat-label { color: #94a3b8; font-size: 10px; text-transform: uppercase; font-weight: 700; margin-bottom: 4px; }
-    .stat-value { color: #ffffff; font-size: 18px; font-weight: 900; }
+    .stat-label { color: #94a3b8 !important; font-size: 10px; text-transform: uppercase; font-weight: 700; margin-bottom: 4px; }
+    .stat-value { color: #ffffff !important; font-size: 18px; font-weight: 900; }
 
     .breakdown-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; margin: 25px 0; padding: 25px 0; border-top: 1px solid rgba(255,255,255,0.1); border-bottom: 1px solid rgba(255,255,255,0.1); }
-    .breakdown-item { font-size: 13px; color: #94a3b8; }
-    .breakdown-item b { color: #ffffff; font-size: 18px; display: block; margin-top: 5px; }
+    .breakdown-item { font-size: 13px; color: #94a3b8 !important; }
+    .breakdown-item b { color: #ffffff !important; font-size: 18px; display: block; margin-top: 5px; }
     
     .alt-card { background: #0f172a; border-left: 5px solid #334155; padding: 20px 25px; margin-bottom: 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; }
     .alt-best { border-left-color: #ed8936; background: rgba(237, 137, 54, 0.05); }
-    .price-tag { color: #ed8936; font-size: 22px; font-weight: 900; }
+    .price-tag { color: #ed8936 !important; font-size: 22px; font-weight: 900; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 4. FUNKCJE ---
+# --- 4. FUNKCJE POMOCNICZE ---
 def make_hash(password): return hashlib.sha256(password.strip().encode()).hexdigest()
 
 @st.cache_data(ttl=60)
@@ -158,11 +170,11 @@ if not st.session_state.authenticated:
             else: st.error("Błędny login lub hasło.")
     st.stop()
 
-# --- 6. PRZYGOTOWANIE DANYCH ---
+# --- 6. DANE ---
 df_baza, df_oplaty = fetch_data()
 cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc'])) if not df_oplaty.empty else {}
 
-# --- 7. SIDEBAR ---
+# --- 7. SIDEBAR (BIAŁE NAPISY) ---
 with st.sidebar:
     st.markdown('<div style="text-align:center; margin-bottom:20px;"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div></div>', unsafe_allow_html=True)
     
@@ -177,9 +189,9 @@ with st.sidebar:
     weight_brutto = weight_netto * 1.20
     
     st.markdown(f"""
-        <div style="background:rgba(237,137,54,0.1); border:1px solid #ed8936; padding:15px; border-radius:10px; color:#ed8936; text-align:center;">
-            <div style="font-size:10px; opacity:0.8; font-weight:bold;">SZACUNKOWA WAGA BRUTTO</div>
-            <div style="font-size:22px; font-weight:900;">{weight_brutto:,.0f} KG</div>
+        <div style="background:rgba(237,137,54,0.1); border:2px solid #ed8936; padding:15px; border-radius:10px; color:#ed8936; text-align:center;">
+            <div style="font-size:11px; font-weight:bold; color:#ffffff;">SZACUNKOWA WAGA BRUTTO</div>
+            <div style="font-size:24px; font-weight:900; color:#ed8936;">{weight_brutto:,.0f} KG</div>
         </div>
     """, unsafe_allow_html=True)
     
@@ -195,7 +207,7 @@ with st.sidebar:
         st.session_state.clear()
         st.rerun()
 
-# --- 8. LOGIKA TABS ---
+# --- 8. TABS ---
 if st.session_state.current_user == "admin":
     tab_calc, tab_admin = st.tabs(["🚀 KALKULATOR", "⚙️ ADMIN TOOL"])
 else:
@@ -235,33 +247,35 @@ with tab_calc:
             br_items = "".join([f"<div class='breakdown-item'>{k}: <b>€ {v:,.0f}</b></div>" for k, v in best['brk'].items() if v > 0])
             st.markdown(f"""
                 <div class="hero-card">
-                    <div style="color:#ed8936; font-size:14px; font-weight:800; letter-spacing:1px;">OPTYMALNY WYBÓR: {best['v']} x{best['qty']}</div>
+                    <div style="color:#ed8936; font-size:14px; font-weight:800; letter-spacing:1px;">KOSZT SZACUNKOWY NETTO</div>
                     <div class="main-price-value">€ {best['total']:,.2f}</div>
                     <div class="breakdown-container">{br_items}</div>
                     <div style="display:flex; gap:15px; justify-content: flex-start;">
-                        <div class="stat-box"><div class="stat-label">Wyjazd</div><div class="stat-value">{dep_date.strftime('%d.%m')}</div></div>
                         <div class="stat-box"><div class="stat-label">Tranzyt</div><div class="stat-value">{best['tr']} Dni</div></div>
-                        <div class="stat-box"><div class="stat-label">Wypełnienie</div><div class="stat-value">{best['util']:.0f}%</div></div>
+                        <div class="stat-box"><div class="stat-label">Pobyt</div><div class="stat-value">{days_stay} Dni</div></div>
+                        <div class="stat-box"><div class="stat-label">Pojazd</div><div class="stat-value">{best['v']}</div></div>
+                        <div class="stat-box"><div class="stat-label">Ładunek</div><div class="stat-value">{best['util']:.0f}%</div></div>
                     </div>
                 </div>
             """, unsafe_allow_html=True)
+            st.markdown("### 📊 ANALIZA PORÓWNAWCZA")
             for res in sorted(final_results, key=lambda x: x['total']):
                 is_win = "alt-best" if res['v'] == best['v'] else ""
-                st.markdown(f'<div class="alt-card {is_win}"><div><b>{res["v"]}</b> ({res["qty"]} szt.)</div><div class="price-tag">€ {res["total"]:,.2f}</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="alt-card {is_win}"><div><b>{res["v"]}</b> ({res["qty"]} szt. | ładunek {res["util"]:.0f}%)</div><div class="price-tag">€ {res["total"]:,.2f}</div></div>', unsafe_allow_html=True)
         with col_map:
             s_c, e_c = CITY_COORDS["Komorniki (Baza)"], CITY_COORDS.get(target_city, [52, 13])
             st.pydeck_chart(pdk.Deck(map_provider="carto", map_style="light", initial_view_state=pdk.ViewState(latitude=(s_c[0]+e_c[0])/2, longitude=(s_c[1]+e_c[1])/2, zoom=4),
                 layers=[pdk.Layer("ArcLayer", data=pd.DataFrame([{"s": [s_c[1], s_c[0]], "e": [e_c[1], e_c[0]]}]), get_source_position="s", get_target_position="e", get_source_color=[237, 137, 54], get_width=5)]))
-            st.warning(f"Sugerowana data wyjazdu: **{dep_date.strftime('%Y-%m-%d')}**")
+            st.warning(f"🚛 SUGEROWANA DATA WYJAZDU: {dep_date.strftime('%Y-%m-%d')}")
 
 # --- TAB 2: ADMIN TOOL ---
 if tab_admin is not None:
     with tab_admin:
-        st.header("⚙️ Zarządzanie SQM VENTAGE")
-        with st.expander("🔐 DODAWANIE UŻYTKOWNIKA", expanded=True):
+        st.header("⚙️ PANEL ADMINISTRATORA")
+        with st.expander("🔐 GENERATOR UŻYTKOWNIKÓW"):
             c1, c2 = st.columns(2)
             gen_u, gen_p = c1.text_input("Login"), c2.text_input("Hasło", type="password")
-            if gen_u and gen_p: st.code(f"username: {gen_u}\npassword: {make_hash(gen_p)}")
+            if gen_u and gen_p: st.code(f"Konto: {gen_u} | Hash: {make_hash(gen_p)}")
         st.dataframe(df_baza, use_container_width=True)
-        st.link_button("👉 EDYTUJ GOOGLE SHEETS", f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit")
-        if st.button("🔄 ODSWIEŻ DANE"): st.cache_data.clear(); st.rerun()
+        st.link_button("📂 EDYTUJ BAZĘ DANYCH", f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit")
+        if st.button("🔄 SYNCHRONIZUJ TERAZ"): st.cache_data.clear(); st.rerun()
