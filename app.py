@@ -7,13 +7,13 @@ import math
 import numpy as np
 import pydeck as pdk
 
-# --- 1. KONFIGURACJA I ADRESY ARKUSZY ---
+# --- 1. KONFIGURACJA ZASOBÓW (GOOGLE SHEETS) ---
 SHEET_ID = "1sYlXP6WVzPE09qfmydQYQNsjiZcDgRSJGyWoXfjmkDY"
 URL_BAZA = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=CENNIK_BAZA"
 URL_OPLATY = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=OPLATY_STALE"
 URL_USERS = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=USERS"
 
-# Dane geograficzne i tranzytowe
+# Baza czasów tranzytu (dni)
 TRANSIT_DATA = {
     "Berlin": {"BUS": 1, "FTL/SOLO": 1}, "Gdańsk": {"BUS": 1, "FTL/SOLO": 1},
     "Hamburg": {"BUS": 1, "FTL/SOLO": 1}, "Hannover": {"BUS": 1, "FTL/SOLO": 1},
@@ -50,7 +50,7 @@ CITY_COORDS = {
 }
 
 # --- 2. KONFIGURACJA STRONY ---
-st.set_page_config(page_title="SQM VENTAGE v5.1.9", layout="wide")
+st.set_page_config(page_title="SQM VENTAGE v5.2.0", layout="wide")
 
 # --- 3. STYLE CSS ---
 st.markdown("""
@@ -77,7 +77,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 4. FUNKCJE DANYCH ---
+# --- 4. FUNKCJE POMOCNICZE ---
 def make_hash(p): return hashlib.sha256(p.strip().encode()).hexdigest()
 
 @st.cache_data(ttl=60)
@@ -105,102 +105,117 @@ if "authenticated" not in st.session_state:
 if not st.session_state.authenticated:
     _, col, _ = st.columns([1, 1.2, 1])
     with col:
-        st.markdown("<div style='text-align:center; margin-top:100px;'><h1 style='color:white;'>SQM VENTAGE</h1></div>", unsafe_allow_html=True)
+        st.markdown("<div style='text-align:center; margin-top:100px;'><h1 style='color:white;'>SQM <span style='color:#ed8936;'>VENTAGE</span></h1></div>", unsafe_allow_html=True)
         u_in = st.text_input("Użytkownik", key="login_user")
         p_in = st.text_input("Hasło", type="password", key="login_pass")
-        if st.button("ZALOGUJ", use_container_width=True):
+        if st.button("ZALOGUJ DO SYSTEMU", use_container_width=True):
             users = load_users()
             if u_in in users and users[u_in] == make_hash(p_in):
                 st.session_state.authenticated = True
                 st.session_state.current_user = u_in
-                st.session_state.user_role = "admin" # Wymuszamy rolę by uniknąć błędów
                 st.rerun()
-            else: st.error("Błędne dane.")
+            else: st.error("Błędne dane logowania.")
     st.stop()
 
-# --- 6. GŁÓWNA STRUKTURA (TABSY) ---
-tab1, tab2 = st.tabs(["🚀 KALKULATOR", "⚙️ ADMIN TOOL"])
-
+# --- 6. PRZYGOTOWANIE DANYCH ---
 df_baza, df_oplaty = fetch_data()
 cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc'])) if not df_oplaty.empty else {}
 
-# --- TAB 1: KALKULATOR ---
-with tab1:
-    with st.sidebar:
-        st.markdown('<div class="brand-container"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div></div>', unsafe_allow_html=True)
-        trip_type = st.radio("KIERUNEK", ["PEŁNA TRASA (EXP+IMP)", "TYLKO DOSTAWA (ONE-WAY)"])
-        mode = st.radio("STRATEGIA", ["DEDYKOWANY", "DOŁADUNEK"])
-        target = st.selectbox("CEL PODRÓŻY", sorted(TRANSIT_DATA.keys()))
-        base_weight = st.number_input("WAGA NETTO (KG)", value=1000, step=100)
-        real_weight = base_weight * 1.20
-        st.markdown(f'<div style="background:rgba(237,137,54,0.1); border:1px solid #ed8936; padding:10px; border-radius:8px; color:#ed8936; text-align:center;">WAGA BRUTTO: {real_weight:,.0f} KG</div>', unsafe_allow_html=True)
-        d_start = st.date_input("DZIEŃ MONTAŻU", datetime.now() + timedelta(days=7))
-        days_stay = 0
-        if trip_type == "PEŁNA TRASA (EXP+IMP)":
-            d_end = st.date_input("DZIEŃ DEMONTAŻU", d_start + timedelta(days=4))
-            days_stay = max(0, (d_end - d_start).days)
-        if st.button("WYLOGUJ"): st.session_state.clear(); st.rerun()
+# --- 7. INTERFEJS GŁÓWNY (TABS) ---
+tab_calc, tab_admin = st.tabs(["🚀 KALKULATOR", "⚙️ ADMIN TOOL"])
 
-    # Obliczenia
+# --- SIDEBAR (WSPÓLNY) ---
+with st.sidebar:
+    st.markdown('<div class="brand-container"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div></div>', unsafe_allow_html=True)
+    trip_type = st.radio("KIERUNEK", ["PEŁNA TRASA (EXP+IMP)", "TYLKO DOSTAWA (ONE-WAY)"])
+    mode = st.radio("STRATEGIA", ["DEDYKOWANY", "DOŁADUNEK"])
+    target = st.selectbox("CEL PODRÓŻY", sorted(TRANSIT_DATA.keys()))
+    base_weight = st.number_input("WAGA PROJEKTU (KG)", value=1000, step=100)
+    real_weight = base_weight * 1.20
+    st.markdown(f'<div style="background:rgba(237,137,54,0.1); border:1px solid #ed8936; padding:12px; border-radius:8px; color:#ed8936; font-size:0.9rem; font-weight:bold; text-align:center; margin-bottom:20px;">WAGA BRUTTO: {real_weight:,.0f} KG</div>', unsafe_allow_html=True)
+    d_start = st.date_input("DATA MONTAŻU", datetime.now() + timedelta(days=7))
+    days_stay = 0
+    if trip_type == "PEŁNA TRASA (EXP+IMP)":
+        d_end = st.date_input("DATA DEMONTAŻU", d_start + timedelta(days=4))
+        days_stay = max(0, (d_end - d_start).days)
+    if st.button("🚪 WYLOGUJ", use_container_width=True):
+        st.session_state.clear()
+        st.rerun()
+
+# --- TAB 1: KALKULATOR LOGISTYCZNY ---
+with tab_calc:
     caps = {"BUS": 1200, "SOLO": 5500, "FTL": 10500}
     results = []
+    
     if not df_baza.empty:
         for v_type, cap in caps.items():
             res = df_baza[(df_baza['Miasto'] == target) & (df_baza['Typ_Pojazdu'] == v_type)]
             if not res.empty:
-                r = res.iloc[0]; v_count = math.ceil(real_weight / cap)
+                r = res.iloc[0]
+                v_count = math.ceil(real_weight / cap)
                 transit = TRANSIT_DATA.get(target, {}).get("BUS" if v_type=="BUS" else "FTL/SOLO", 2)
+                
+                # Obliczenia stawek
                 exp_v = (r['Eksport'] * v_count if mode == "DEDYKOWANY" else r['Eksport'] * (real_weight/cap))
                 imp_v = (r['Import'] * v_count if mode == "DEDYKOWANY" else r['Import'] * (real_weight/cap)) if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else 0
                 stay_v = r['Postoj'] * days_stay * v_count
                 park_v = (days_stay * cfg.get('PARKING_DAY', 30) * v_count)
+                
+                # Dodatki specyficzne (UK/Szwajcaria)
                 ata_v = (cfg.get('ATA_CARNET', 166) if target in ["Londyn", "Genewa", "Liverpool", "Manchester"] else 0)
                 ferry_v = (cfg.get('Ferry_UK', 450) if any(x in target for x in ["Londyn", "Liverpool", "Manchester"]) else 0)
+                
+                total = exp_v + imp_v + stay_v + park_v + ata_v + ferry_v
                 results.append({
-                    "Pojazd": v_type, "Szt": v_count, "Total": exp_v + imp_v + stay_v + park_v + ata_v + ferry_v,
-                    "transit": transit, "load": min(100, (real_weight/(v_count*cap))*100),
-                    "exp": exp_v, "imp": imp_v, "stay": stay_v, "stay_rate": r['Postoj'], "parking": park_v, "ata": ata_v, "ferry": ferry_v
+                    "Pojazd": v_type, "Szt": v_count, "Total": total, "transit": transit,
+                    "load": min(100, (real_weight/(v_count*cap))*100),
+                    "exp": exp_v, "imp": imp_v, "stay": stay_v, "stay_rate": r['Postoj'], "park": park_v, "ata": ata_v, "ferry": ferry_v
                 })
 
     if results:
         best = min(results, key=lambda x: x['Total'])
         dep_date = d_start - timedelta(days=best['transit'] + 1)
+        
         st.markdown(f'<div class="route-header">KOMORNIKI ➔ {target.upper()}</div>', unsafe_allow_html=True)
-        cl, cr = st.columns([1.8, 1])
-        with cl:
+        col_main, col_map = st.columns([1.8, 1])
+        
+        with col_main:
+            # Hero Card
             b_html = f"<div class='breakdown-item'>Eksport: <b>€ {best['exp']:,.0f}</b></div>"
             if trip_type != "TYLKO DOSTAWA (ONE-WAY)": b_html += f"<div class='breakdown-item'>Import: <b>€ {best['imp']:,.0f}</b></div>"
             b_html += f"<div class='breakdown-item'>Postój: <b>€ {best['stay']:,.0f}</b></div>"
-            if best['parking'] > 0: b_html += f"<div class='breakdown-item'>Parking: <b>€ {best['parking']:,.0f}</b></div>"
-            if best['ata'] > 0: b_html += f"<div class='breakdown-item'>ATA: <b>€ {best['ata']:,.0f}</b></div>"
+            if best['park'] > 0: b_html += f"<div class='breakdown-item'>Parking/Hotel: <b>€ {best['park']:,.0f}</b></div>"
+            if best['ata'] > 0: b_html += f"<div class='breakdown-item'>Odprawa: <b>€ {best['ata']:,.0f}</b></div>"
             if best['ferry'] > 0: b_html += f"<div class='breakdown-item'>Prom: <b>€ {best['ferry']:,.0f}</b></div>"
 
             st.markdown(f"""
                 <div class="hero-card">
-                    <div style='color:#ed8936; font-size:14px; font-weight:800;'>KOSZT SZACUNKOWY NETTO</div>
+                    <div style='color:#ed8936; font-size:14px; font-weight:800;'>SZACOWANY KOSZT NETTO</div>
                     <div class="main-price-value">€ {best['Total']:,.2f}</div>
                     <div class="breakdown-container">{b_html}</div>
                     <div style='display:grid; grid-template-columns: repeat(4, 1fr); gap:15px;'>
                         <div style='background:rgba(255,255,255,0.05); padding:15px; border-radius:15px; text-align:center;'>
-                            <div style='color:#94a3b8; font-size:10px;'>TRANZYT</div><div style='color:white; font-size:20px; font-weight:900;'>{best['transit']} dni</div>
+                            <div style='color:#94a3b8; font-size:10px;'>TRANZYT</div><div style='color:white; font-size:18px; font-weight:900;'>{best['transit']} dni</div>
                         </div>
                         <div style='background:rgba(255,255,255,0.05); padding:15px; border-radius:15px; text-align:center;'>
-                            <div style='color:#94a3b8; font-size:10px;'>AUTO</div><div style='color:white; font-size:20px; font-weight:900;'>{best['Pojazd']}</div>
+                            <div style='color:#94a3b8; font-size:10px;'>AUTO</div><div style='color:white; font-size:18px; font-weight:900;'>{best['Pojazd']}</div>
                         </div>
                         <div style='background:rgba(255,255,255,0.05); padding:15px; border-radius:15px; text-align:center;'>
-                            <div style='color:#94a3b8; font-size:10px;'>SZTUK</div><div style='color:white; font-size:20px; font-weight:900;'>{best['Szt']}</div>
+                            <div style='color:#94a3b8; font-size:10px;'>SZTUK</div><div style='color:white; font-size:18px; font-weight:900;'>{best['Szt']}</div>
                         </div>
                         <div style='background:rgba(255,255,255,0.05); padding:15px; border-radius:15px; text-align:center;'>
-                            <div style='color:#94a3b8; font-size:10px;'>ŁADUNEK</div><div style='color:white; font-size:20px; font-weight:900;'>{best['load']:.0f}%</div>
+                            <div style='color:#94a3b8; font-size:10px;'>WYPEŁNIENIE</div><div style='color:white; font-size:18px; font-weight:900;'>{best['load']:.0f}%</div>
                         </div>
                     </div>
                 </div>
             """, unsafe_allow_html=True)
+            
+            st.markdown("### 📊 OPCJE POJAZDÓW")
             for r in sorted(results, key=lambda x: x['Total']):
                 is_best = "alt-best" if r['Pojazd'] == best['Pojazd'] else ""
-                st.markdown(f"""<div class="alt-card {is_best}"><div><b>{r['Pojazd']}</b> ({r['Szt']} szt.)</div><div class="price-tag">€ {r['Total']:,.2f}</div></div>""", unsafe_allow_html=True)
+                st.markdown(f"""<div class="alt-card {is_best}"><div><b>{r['Pojazd']}</b> ({r['Szt']} szt. | {r['load']:.0f}% załadunku)</div><div class="price-tag">€ {r['Total']:,.2f}</div></div>""", unsafe_allow_html=True)
 
-        with cr:
+        with col_map:
             s, e = CITY_COORDS["Komorniki (Baza)"], CITY_COORDS.get(target, [52.5, 13.4])
             st.pydeck_chart(pdk.Deck(
                 map_provider="carto", map_style="light",
@@ -211,25 +226,26 @@ with tab1:
                     pdk.Layer("ScatterplotLayer", data=pd.DataFrame([{"p": [s[1], s[0]]}, {"p": [e[1], e[0]]}]), get_position="p", get_color=[237, 137, 54], get_radius=40000)
                 ]
             ))
-            st.warning(f"🚚 **WYJAZD: {dep_date.strftime('%Y-%m-%d')}**")
+            st.warning(f"🚚 **TERMIN WYJAZDU: {dep_date.strftime('%Y-%m-%d')}**")
 
-# --- TAB 2: ADMIN TOOL ---
-with tab2:
-    st.header("⚙️ Zarządzanie Bazą Danych")
-    st.info(f"Zalogowano jako: {st.session_state.get('current_user', 'Nieznany')}")
+# --- TAB 2: ADMIN TOOL (PEŁNY) ---
+with tab_admin:
+    st.header("⚙️ Zarządzanie Danymi")
+    st.markdown(f"**Użytkownik:** {st.session_state.current_user}")
     
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.subheader("Baza Cennikowa")
-        st.dataframe(df_baza, use_container_width=True)
-    with col_b:
-        st.subheader("Opłaty Stałe")
+    col_db1, col_db2 = st.columns(2)
+    with col_db1:
+        st.subheader("Baza Cennikowa Miast")
+        st.dataframe(df_baza, use_container_width=True, height=400)
+    with col_db2:
+        st.subheader("Parametry i Opłaty")
         st.dataframe(df_oplaty, use_container_width=True)
     
     st.markdown("---")
-    st.markdown("### Instrukcja aktualizacji danych")
-    st.write("Aby zmienić ceny lub parametry, edytuj arkusz Google poniżej:")
-    st.link_button("Otwórz Arkusz Google", f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit")
-    if st.button("Odśwież dane z arkusza"):
+    st.subheader("Aktualizacja Bazy")
+    st.write("Wszystkie dane są pobierane z Arkusza Google. Edytuj go pod linkiem poniżej:")
+    st.link_button("👉 EDYTUJ ARKUSZ GOOGLE", f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit")
+    
+    if st.button("🔄 ODSWIEŻ DANE (CLEAR CACHE)"):
         st.cache_data.clear()
         st.rerun()
