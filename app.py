@@ -3,9 +3,9 @@ import pandas as pd
 from datetime import datetime, timedelta
 import re
 import hashlib
-import extra_streamlit_components as stx
 import math
 import numpy as np
+import pydeck as pdk
 
 # --- KONFIGURACJA ZASOBÓW ---
 SHEET_ID = "1sYlXP6WVzPE09qfmydQYQNsjiZcDgRSJGyWoXfjmkDY"
@@ -33,29 +33,22 @@ TRANSIT_DATA = {
     "Madryt": {"BUS": 3, "FTL/SOLO": 4}, "Sewilla": {"BUS": 3, "FTL/SOLO": 5}
 }
 
-# KOMPLETNE WSPÓŁRZĘDNE DLA WSZYSTKICH MIAST Z LISTY
 CITY_COORDS = {
-    "Komorniki (Baza)": [52.3358, 16.8122],
-    "Amsterdam": [52.3702, 4.8952], "Barcelona": [41.3851, 2.1734],
-    "Bazylea": [47.5596, 7.5886], "Berlin": [52.5200, 13.4050],
-    "Bruksela": [50.8503, 4.3517], "Budapeszt": [47.4979, 19.0402],
-    "Cannes / Nicea": [43.5528, 7.0174], "Frankfurt nad Menem": [50.1109, 8.6821],
-    "Gdańsk": [54.3520, 18.6466], "Genewa": [46.2044, 6.1432],
-    "Hamburg": [53.5511, 9.9937], "Hannover": [52.3759, 9.7320],
-    "Kielce": [50.8660, 20.6286], "Kolonia / Dusseldorf": [51.2277, 6.7735],
-    "Kopenhaga": [55.6761, 12.5683], "Lipsk": [51.3397, 12.3731],
-    "Liverpool": [53.4084, -2.9916], "Lizbona": [38.7223, -9.1393],
-    "Londyn": [51.5074, -0.1276], "Lyon": [45.7640, 4.8357],
-    "Madryt": [40.4168, -3.7038], "Manchester": [53.4808, -2.2426],
-    "Mediolan": [45.4642, 9.1900], "Monachium": [48.1351, 11.5820],
-    "Norymberga": [49.4521, 11.0767], "Paryż": [48.8566, 2.3522],
-    "Praga": [50.0755, 14.4378], "Rzym": [41.9028, 12.4964],
-    "Sewilla": [37.3891, -5.9845], "Sofia": [42.6977, 23.3219],
-    "Sztokholm": [59.3293, 18.0686], "Tuluza": [43.6047, 1.4442],
-    "Warszawa": [52.2297, 21.0122], "Wiedeń": [48.2082, 16.3738]
+    "Komorniki (Baza)": [52.3358, 16.8122], "Amsterdam": [52.3702, 4.8952], 
+    "Barcelona": [41.3851, 2.1734], "Bazylea": [47.5596, 7.5886], "Berlin": [52.5200, 13.4050],
+    "Bruksela": [50.8503, 4.3517], "Budapeszt": [47.4979, 19.0402], "Cannes / Nicea": [43.5528, 7.0174],
+    "Frankfurt nad Menem": [50.1109, 8.6821], "Gdańsk": [54.3520, 18.6466], "Genewa": [46.2044, 6.1432],
+    "Hamburg": [53.5511, 9.9937], "Hannover": [52.3759, 9.7320], "Kielce": [50.8660, 20.6286],
+    "Kolonia / Dusseldorf": [51.2277, 6.7735], "Kopenhaga": [55.6761, 12.5683], "Lipsk": [51.3397, 12.3731],
+    "Liverpool": [53.4084, -2.9916], "Lizbona": [38.7223, -9.1393], "Londyn": [51.5074, -0.1276],
+    "Lyon": [45.7640, 4.8357], "Madryt": [40.4168, -3.7038], "Manchester": [53.4808, -2.2426],
+    "Mediolan": [45.4642, 9.1900], "Monachium": [48.1351, 11.5820], "Norymberga": [49.4521, 11.0767],
+    "Paryż": [48.8566, 2.3522], "Praga": [50.0755, 14.4378], "Rzym": [41.9028, 12.4964],
+    "Sewilla": [37.3891, -5.9845], "Sofia": [42.6977, 23.3219], "Sztokholm": [59.3293, 18.0686],
+    "Tuluza": [43.6047, 1.4442], "Warszawa": [52.2297, 21.0122], "Wiedeń": [48.2082, 16.3738]
 }
 
-st.set_page_config(page_title="SQM VENTAGE v5.1.0", layout="wide")
+st.set_page_config(page_title="SQM VENTAGE v5.1.2", layout="wide")
 
 # --- CSS ---
 st.markdown("""
@@ -110,6 +103,8 @@ st.markdown("""
     .alt-card { background: #0f172a; border-left: 5px solid #475569; padding: 18px 25px; margin-bottom: 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
     .alt-best { border-left-color: #ed8936; background: rgba(237, 137, 54, 0.1); }
     .price-tag { color: #ed8936; font-size: 20px; font-weight: 900; }
+    
+    [data-testid="stSidebar"] label p { color: #94a3b8 !important; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -144,7 +139,7 @@ if not st.session_state.authenticated:
                 st.error("Błędne dane logowania")
     st.stop()
 
-# --- POBIERANIE DANYCH ---
+# --- DANE ---
 @st.cache_data(ttl=60)
 def fetch_data():
     try:
@@ -162,7 +157,7 @@ cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc'])) if not df_oplaty.em
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.markdown('<div class="brand-container"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div><div class="brand-ver">SYSTEM LOGISTYCZNY VER. 5.1.0</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="brand-container"><div class="brand-logo"><span class="brand-v">V</span> SQM VENTAGE</div><div class="brand-ver">SYSTEM LOGISTYCZNY VER. 5.1.2</div></div>', unsafe_allow_html=True)
     st.markdown("### 🚛 PARAMETRY")
     trip_type = st.radio("KIERUNEK", ["PEŁNA TRASA (EXP+IMP)", "TYLKO DOSTAWA (ONE-WAY)"])
     mode = st.radio("STRATEGIA", ["DEDYKOWANY", "DOŁADUNEK"])
@@ -205,10 +200,13 @@ if not df_baza.empty:
             ferry_v = (cfg.get('Ferry_UK', 450) if any(x in target for x in ["Londyn", "Liverpool", "Manchester"]) else 0)
             
             total = exp_v + imp_v + stay_v + park_v + ata_v + ferry_v
+            
             results.append({
                 "Pojazd": v_type, "Szt": v_count, "Total": total, "transit": transit, 
-                "load": min(100, (real_weight/(v_count*cap))*100), "exp": exp_v, "imp": imp_v, 
-                "stay": stay_v, "stay_rate": daily_stay_rate, "parking": park_v, "ata": ata_v, "ferry": ferry_v
+                "load": min(100, (real_weight/(v_count*cap))*100), 
+                "exp": exp_v, "imp": imp_v, 
+                "stay": stay_v, "stay_rate": daily_stay_rate,
+                "parking": park_v, "ata": ata_v, "ferry": ferry_v
             })
 
 # --- WIDOK ---
@@ -262,16 +260,42 @@ if results:
             """, unsafe_allow_html=True)
 
     with cr:
-        # FIX MAPY: Pobieranie precyzyjnych współrzędnych
-        b_pos = CITY_COORDS["Komorniki (Baza)"]
-        d_pos = CITY_COORDS.get(target, [48.8566, 2.3522]) # Teraz d_pos zawsze będzie poprawne
+        # MAPA Z LINIĄ TRASY
+        start_coord = CITY_COORDS["Komorniki (Baza)"]
+        end_coord = CITY_COORDS.get(target, [48.8566, 2.3522])
         
-        # Tworzenie punktów trasy
-        map_data = pd.DataFrame([
-            {'lat': b_pos[0], 'lon': b_pos[1], 'name': 'Baza'},
-            {'lat': d_pos[0], 'lon': d_pos[1], 'name': target}
-        ])
-        
-        st.map(map_data, color='#ed8936', size=20)
+        arc_data = pd.DataFrame([{
+            "source": [start_coord[1], start_coord[0]],
+            "target": [end_coord[1], end_coord[0]]
+        }])
+
+        st.pydeck_chart(pdk.Deck(
+            map_style='mapbox://styles/mapbox/dark-v10',
+            initial_view_state=pdk.ViewState(
+                latitude=(start_coord[0] + end_coord[0]) / 2,
+                longitude=(start_coord[1] + end_coord[1]) / 2,
+                zoom=4, pitch=40
+            ),
+            layers=[
+                pdk.Layer(
+                    "ArcLayer",
+                    data=arc_data,
+                    get_source_position="source",
+                    get_target_position="target",
+                    get_source_color=[237, 137, 54, 255],
+                    get_target_color=[255, 255, 255, 100],
+                    get_width=4,
+                ),
+                pdk.Layer(
+                    "ScatterplotLayer",
+                    data=pd.DataFrame([
+                        {"pos": [start_coord[1], start_coord[0]], "color": [237, 137, 54]},
+                        {"pos": [end_coord[1], end_coord[0]], "color": [255, 255, 255]}
+                    ]),
+                    get_position="pos",
+                    get_color="color",
+                    get_radius=25000,
+                )
+            ]
+        ))
         st.warning(f"🚚 **SUGEROWANA DATA WYJAZDU: {suggested_departure.strftime('%Y-%m-%d')}**")
-        st.info(f"Wyliczenie: {best['transit']} dni drogi + 1 dzień zapasu przed montażem ({d_start}).")
