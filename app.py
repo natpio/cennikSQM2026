@@ -50,7 +50,7 @@ CITY_COORDS = {
 }
 
 # --- 2. KONFIGURACJA STRONY ---
-st.set_page_config(page_title="SQM VENTAGE v5.3.1", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="SQM VENTAGE v5.3.2", layout="wide", initial_sidebar_state="expanded")
 
 # --- 3. STYLE CSS ---
 st.markdown("""
@@ -61,7 +61,7 @@ st.markdown("""
         color: #ffffff !important; font-weight: 700 !important;
     }
     .route-header { font-size: 32px !important; font-weight: 900; color: #ffffff; border-bottom: 4px solid #ed8936; margin-bottom: 30px; padding-bottom: 10px; }
-    .hero-card { background: linear-gradient(145deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 24px; padding: 35px; margin-bottom: 30px; }
+    .hero-card { background: linear-gradient(145deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 24px; padding: 35px; margin-bottom: 30px; position: relative; }
     .main-price-value { color: #ffffff; font-size: 72px; font-weight: 950; margin: 10px 0; line-height: 1; }
     .breakdown-grid { 
         display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); 
@@ -74,6 +74,7 @@ st.markdown("""
     .alt-card { background: #0f172a; border-left: 5px solid #334155; padding: 20px 25px; margin-bottom: 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; color: #ffffff !important; }
     .alt-best { border-left-color: #ed8936; background: rgba(237, 137, 54, 0.05); }
     .price-tag { color: #ed8936 !important; font-size: 22px; font-weight: 900; }
+    .warning-kolko { background: #742a2a; color: white; padding: 10px 20px; border-radius: 10px; font-weight: 800; margin-bottom: 20px; border: 1px solid #f56565; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -142,24 +143,32 @@ with st.sidebar:
         st.session_state.clear()
         st.rerun()
 
-# --- 8. NOWA LOGIKA OPTYMALIZACJI KOSZTÓW (FLEET MIX + BEST RATE) ---
+# --- 8. NOWA LOGIKA OPTYMALIZACJI KOSZTÓW ---
 v_types = {"BUS": 1200, "SOLO": 5500, "FTL": 10500}
 final_results = []
 
 if not df_baza.empty:
-    # 1. Pobierz NAJTAŃSZE stawki dla każdego typu pojazdu dla wybranego miasta
     best_rates = {}
     for vt in v_types.keys():
         options = df_baza[(df_baza['Miasto'] == target_city) & (df_baza['Typ_Pojazdu'] == vt)]
         if not options.empty:
-            # Obliczamy koszt bazowy (Exp + ewentualnie Imp), by znaleźć faktycznie najtańszego przewoźnika dla tego auta
             options = options.copy()
-            options['base_calc'] = options['Eksport'] + (options['Import'] if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else 0)
+            
+            # Funkcja pomocnicza do obliczania bazowego kosztu dla selekcji przewoźnika
+            def calc_row_base(row):
+                is_sqm = "sqm" in str(row['Przewoznik']).lower()
+                cost = row['Eksport']
+                if trip_type == "TYLKO DOSTAWA (ONE-WAY)":
+                    if is_sqm: cost *= 2  # CENA W KÓŁKU DLA SQM
+                else:
+                    cost += row['Import']
+                return cost
+
+            options['base_calc'] = options.apply(calc_row_base, axis=1)
             best_row = options.sort_values('base_calc').iloc[0]
             best_rates[vt] = best_row.to_dict()
 
     if best_rates:
-        # 2. Generowanie sensownych kombinacji floty
         max_ftl = math.ceil(weight_brutto / v_types["FTL"]) + 1
         max_solo = math.ceil(weight_brutto / v_types["SOLO"]) + 1
         max_bus = math.ceil(weight_brutto / v_types["BUS"]) + 1
@@ -174,11 +183,11 @@ if not df_baza.empty:
                         combinations.append({"FTL": f, "SOLO": s, "BUS": b})
                         break 
 
-        # 3. Obliczanie kosztów dla każdej kombinacji
         for combo in combinations:
             c_exp = 0; c_imp = 0; c_stay = 0; c_park = 0; c_ata = 0; c_ferry = 0
             v_desc = []
             max_tr = 0
+            is_kolko_warning = False
             total_qty = sum(combo.values())
             
             if total_qty == 0: continue
@@ -188,25 +197,27 @@ if not df_baza.empty:
                 r = best_rates.get(v_name)
                 if not r: continue
                 
-                # Info o przewoźniku w opisie (dla weryfikacji)
+                is_sqm = "sqm" in str(r.get('Przewoznik', '')).lower()
                 v_desc.append(f"{qty}x {v_name} ({r['Przewoznik']})")
                 
                 tr = TRANSIT_DATA.get(target_city, {}).get("BUS" if v_name=="BUS" else "FTL/SOLO", 2)
                 max_tr = max(max_tr, tr)
-
                 mult = qty if mode == "DEDYKOWANY" else (weight_brutto / v_types[v_name] / total_qty) * qty
                 
-                c_exp += r['Eksport'] * mult
-                c_imp += (r['Import'] * mult) if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else 0
+                # LOGIKA CENY W KÓŁKU DLA SQM ONE-WAY
+                if trip_type == "TYLKO DOSTAWA (ONE-WAY)" and is_sqm:
+                    c_exp += (r['Eksport'] * 2) * mult
+                    is_kolko_warning = True
+                else:
+                    c_exp += r['Eksport'] * mult
+                    c_imp += (r['Import'] * mult) if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else 0
+
                 c_stay += (r['Postoj'] * days_stay * qty) if v_name != "BUS" else 0
                 c_park += (days_stay * cfg.get('PARKING_DAY', 30) * qty)
                 
-                # ATA Carnet - niezależnie od przewoźnika (opłata administracyjna)
                 if target_city in ["Londyn", "Genewa", "Liverpool", "Manchester"]:
                     c_ata += cfg.get('ATA_CARNET', 166) * qty
 
-                # PROMY - Tylko jeśli przewoźnik to "Własny SQM"
-                is_sqm = "sqm" in str(r.get('Przewoznik', '')).lower()
                 if is_sqm and any(x in target_city for x in ["Londyn", "Liverpool", "Manchester"]):
                     c_ferry += cfg.get('Ferry_UK', 450) * qty
 
@@ -216,6 +227,7 @@ if not df_baza.empty:
                 "v_label": ", ".join(v_desc),
                 "total": total_cost,
                 "tr": max_tr,
+                "kolko": is_kolko_warning,
                 "util": (weight_brutto / (combo['FTL']*10500 + combo['SOLO']*5500 + combo['BUS']*1200)) * 100,
                 "brk": {
                     "Eksport": c_exp, "Import": c_imp, "Postój": c_stay, 
@@ -236,6 +248,10 @@ with tab_calc:
         dep_date = date_start - timedelta(days=best['tr'] + 1)
         
         st.markdown(f'<div class="route-header">KOMORNIKI ➔ {target_city.upper()}</div>', unsafe_allow_html=True)
+        
+        if best['kolko']:
+            st.markdown('<div class="warning-kolko">⚠️ WYMAGANA CENA W KÓŁKU: Wybrano transport własny SQM na trasie jednostronnej. Koszt eksportu został podwojony w celu pokrycia powrotu auta.</div>', unsafe_allow_html=True)
+
         c_left, c_right = st.columns([1.8, 1])
         
         with c_left:
@@ -257,9 +273,10 @@ with tab_calc:
             st.markdown("### 📊 PORÓWNANIE INNYCH KOMBINACJI")
             for res in final_results[:5]: 
                 is_win = "alt-best" if res == best else ""
+                kolko_tag = " (KÓŁKO)" if res['kolko'] else ""
                 st.markdown(f"""
                     <div class="alt-card {is_win}">
-                        <div><b>{res['v_label']}</b> (Utylizacja: {res['util']:.0f}%)</div>
+                        <div><b>{res['v_label']}{kolko_tag}</b> (Utylizacja: {res['util']:.0f}%)</div>
                         <div class="price-tag">€ {res['total']:,.2f}</div>
                     </div>
                 """, unsafe_allow_html=True)
@@ -269,7 +286,7 @@ with tab_calc:
             st.pydeck_chart(pdk.Deck(map_provider="carto", map_style="light", 
                 initial_view_state=pdk.ViewState(latitude=(s_c[0]+e_c[0])/2, longitude=(s_c[1]+e_c[1])/2, zoom=4),
                 layers=[pdk.Layer("ArcLayer", data=pd.DataFrame([{"s": [s_c[1], s_c[0]], "e": [e_c[1], e_c[0]]}]), get_source_position="s", get_target_position="e", get_source_color=[237, 137, 54], get_width=5)]))
-            st.info(f"Rekomendacja: Dla wagi {weight_brutto:,.0f} kg brutto, system wybrał najtańszego dostępnego przewoźnika i optymalny miks aut: **{best['v_label']}**.")
+            st.info(f"Rekomendacja: System porównał stawki przewoźników zewnętrznych i własnych. Wybrano najkorzystniejszy wariant uwzględniający koszty powrotów i promów.")
 
 if tab_admin is not None:
     with tab_admin:
