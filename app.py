@@ -12,6 +12,7 @@ URL_BAZA = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:c
 URL_OPLATY = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=OPLATY_STALE"
 URL_USERS = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=USERS"
 
+# Dane tranzytowe i współrzędne
 TRANSIT_DATA = {
     "Berlin": {"BUS": 1, "FTL/SOLO": 1}, "Gdańsk": {"BUS": 1, "FTL/SOLO": 1},
     "Hamburg": {"BUS": 1, "FTL/SOLO": 1}, "Hannover": {"BUS": 1, "FTL/SOLO": 1},
@@ -33,18 +34,18 @@ TRANSIT_DATA = {
 }
 
 CITY_COORDS = {
-    "Komorniki (Baza)": [52.3358, 16.8122], "Amsterdam": [52.3702, 4.8952], 
-    "Barcelona": [41.3851, 2.1734], "Bazylea": [47.5596, 7.5886], "Berlin": [52.5200, 13.4050],
-    "Bruksela": [50.8503, 4.3517], "Budapeszt": [47.4979, 19.0402], "Cannes / Nicea": [43.5528, 7.0174],
-    "Frankfurt nad Menem": [50.1109, 8.6821], "Gdańsk": [54.3520, 18.6466], "Genewa": [46.2044, 6.1432],
-    "Hamburg": [53.5511, 9.9937], "Hannover": [52.3759, 9.7320], "Kielce": [50.8660, 20.6286],
-    "Kolonia / Dusseldorf": [51.2277, 6.7735], "Kopenhaga": [55.6761, 12.5683], "Lipsk": [51.3397, 12.3731],
-    "Liverpool": [53.4084, -2.9916], "Lizbona": [38.7223, -9.1393], "Londyn": [51.5074, -0.1276],
-    "Lyon": [45.7640, 4.8357], "Madryt": [40.4168, -3.7038], "Manchester": [53.4808, -2.2426],
-    "Mediolan": [45.4642, 9.1900], "Monachium": [48.1351, 11.5820], "Norymberga": [49.4521, 11.0767],
-    "Paryż": [48.8566, 2.3522], "Praga": [50.0755, 14.4378], "Rzym": [41.9028, 12.4964],
-    "Sewilla": [37.3891, -5.9845], "Sofia": [42.6977, 23.3219], "Sztokholm": [59.3293, 18.0686],
-    "Tuluza": [43.6047, 1.4442], "Warszawa": [52.2297, 21.0122], "Wiedeń": [48.2082, 16.3738]
+    "Komorniki (Baza)": [16.8122, 52.3358], "Amsterdam": [4.8952, 52.3702], 
+    "Barcelona": [2.1734, 41.3851], "Bazylea": [7.5886, 47.5596], "Berlin": [13.4050, 52.5200],
+    "Bruksela": [4.3517, 50.8503], "Budapeszt": [19.0402, 47.4979], "Cannes / Nicea": [7.0174, 43.5528],
+    "Frankfurt nad Menem": [8.6821, 50.1109], "Gdańsk": [18.6466, 54.3520], "Genewa": [6.1432, 46.2044],
+    "Hamburg": [9.9937, 53.5511], "Hannover": [9.7320, 52.3759], "Kielce": [20.6286, 50.8660],
+    "Kolonia / Dusseldorf": [6.7735, 51.2277], "Kopenhaga": [12.5683, 55.6761], "Lipsk": [12.3731, 51.3397],
+    "Liverpool": [-2.9916, 53.4084], "Lizbona": [-9.1393, 38.7223], "Londyn": [-0.1276, 51.5074],
+    "Lyon": [4.8357, 45.7640], "Madryt": [-3.7038, 40.4168], "Manchester": [-2.2426, 53.4808],
+    "Mediolan": [9.1900, 45.4642], "Monachium": [11.5820, 48.1351], "Norymberga": [11.0767, 49.4521],
+    "Paryż": [2.3522, 48.8566], "Praga": [14.4378, 50.0755], "Rzym": [12.4964, 41.9028],
+    "Sewilla": [-5.9845, 37.3891], "Sofia": [23.3219, 42.6977], "Sztokholm": [18.0686, 59.3293],
+    "Tuluza": [1.4442, 43.6047], "Warszawa": [21.0122, 52.2297], "Wiedeń": [16.3738, 48.2082]
 }
 
 # --- 2. KONFIGURACJA STRONY ---
@@ -55,7 +56,6 @@ st.markdown("""
     <style>
     .stApp { background-color: #05070a !important; }
     [data-testid="stSidebar"] { background-color: #0f172a !important; border-right: 1px solid #334155; }
-    [data-testid="stSidebar"] label, [data-testid="stSidebar"] p { color: white !important; font-weight: 700 !important; }
     .route-header { font-size: 32px !important; font-weight: 900; color: #ffffff; border-bottom: 4px solid #ed8936; margin-bottom: 30px; padding-bottom: 10px; }
     .hero-card { background: #161b2e; border-radius: 15px; border-left: 5px solid #ed8936; padding: 35px; margin-bottom: 25px; }
     .main-price-value { color: #ffffff; font-size: 64px; font-weight: 900; line-height: 1.1; margin: 10px 0; }
@@ -69,7 +69,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 4. FUNKCJE POMOCNICZE ---
+# --- 4. FUNKCJE ---
 def make_hash(password): return hashlib.sha256(password.strip().encode()).hexdigest()
 
 @st.cache_data(ttl=60)
@@ -109,19 +109,18 @@ if not st.session_state.authenticated:
                 st.rerun()
     st.stop()
 
-# --- 6. PRZYGOTOWANIE DANYCH ---
+# --- 6. DANE WEJŚCIOWE I SIDEBAR ---
 df_baza, df_oplaty = fetch_data()
 cfg = dict(zip(df_oplaty['Parametr'], df_oplaty['Wartosc'])) if not df_oplaty.empty else {}
 
-# --- 7. SIDEBAR ---
 with st.sidebar:
     st.markdown("### KONFIGURACJA")
     trip_type = st.radio("KIERUNEK", ["PEŁNA TRASA (EXP+IMP)", "TYLKO DOSTAWA (ONE-WAY)"])
     mode = st.radio("STRATEGIA", ["DEDYKOWANY", "DOŁADUNEK"])
-    target_city = st.selectbox("MIEJSCE DOCELOWE", sorted(TRANSIT_DATA.keys()))
+    target_city = st.selectbox("MIEJSCE DOCELOWE", sorted(TRANSIT_DATA.keys()), index=sorted(TRANSIT_DATA.keys()).index("Londyn") if "Londyn" in TRANSIT_DATA else 0)
     st.markdown("---")
     weight_netto = st.number_input("WAGA NETTO (KG)", value=8500, step=100)
-    weight_brutto = weight_netto * 1.20
+    weight_brutto = weight_netto * cfg.get('WAGA_BUFOR', 1.2)
     st.markdown(f'<div style="background:rgba(237,137,54,0.1); border:1px solid #ed8936; padding:15px; border-radius:10px; color:#ed8936; text-align:center;"><div style="font-size:10px; font-weight:bold;">BRUTTO (ESTYMACJA)</div><div style="font-size:22px; font-weight:900;">{weight_brutto:,.0f} KG</div></div>', unsafe_allow_html=True)
     st.markdown("---")
     date_start = st.date_input("DZIEŃ MONTAŻU", datetime.now() + timedelta(days=14))
@@ -132,8 +131,8 @@ with st.sidebar:
     if st.button("🚪 WYLOGUJ", use_container_width=True):
         st.session_state.clear(); st.rerun()
 
-# --- 8. LOGIKA WYCENY (BUS=SQM, SOLO/FTL=NAJTAŃSZA SPEDYCJA TCO) ---
-v_types = {"BUS": 1200, "SOLO": 5500, "FTL": 10500}
+# --- 7. LOGIKA WYCENY (BUS = WŁASNY SQM, SOLO/FTL = NAJTAŃSZA SPEDYCJA) ---
+v_types = {"BUS": 1200, "SOLO": 3500, "FTL": 10500}
 FERRY_CITIES = ["Londyn", "Liverpool", "Manchester", "Sztokholm"]
 final_results = []
 
@@ -144,47 +143,44 @@ if not df_baza.empty:
         if city_rates.empty: continue
 
         if vt == "BUS":
-            # LOGIKA: TYLKO WŁASNY SQM (BEZ NARZUTU 15%)
-            sqm = city_rates[city_rates['Przewoznik'].str.contains('SQM', case=False, na=False)]
+            sqm = city_rates[city_rates['Przewoznik'].str.contains('WŁASNY SQM', case=False, na=False)]
             if not sqm.empty:
-                f_exp = sqm.iloc[0]['Eksport']
-                f_imp = sqm.iloc[0]['Import'] if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else 0
-                f_stay = sqm.iloc[0]['Postoj']
-                curr_ferry = cfg.get('Ferry_UK', 450) if target_city in FERRY_CITIES else 0
-                safe_rates[vt] = {'exp': f_exp, 'imp': f_imp, 'stay': f_stay, 'ferry': curr_ferry, 'raw_exp': f_exp}
+                r = sqm.iloc[0]
+                f_cost = cfg.get('FERRY_BUS', 332) if target_city in FERRY_CITIES else 0
+                safe_rates[vt] = {
+                    'exp': r['Eksport'], 'imp': r['Import'] if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else 0,
+                    'stay': r['Postoj'], 'ferry': f_cost
+                }
         else:
-            # LOGIKA: NAJTAŃSZA SPEDYCJA POD WZGLĘDEM TCO (EXP+IMP+POSTÓJ)
-            m_rows = city_rates[~city_rates['Przewoznik'].str.contains('SQM', case=False, na=False)].copy()
-            if not m_rows.empty:
+            partners = city_rates[~city_rates['Przewoznik'].str.contains('SQM', case=False, na=False)]
+            if not partners.empty:
                 best_tco = float('inf')
                 best_data = None
-                for _, row in m_rows.iterrows():
-                    p_exp = row['Eksport']
+                for _, row in partners.iterrows():
                     p_imp = row['Import'] if trip_type != "TYLKO DOSTAWA (ONE-WAY)" else 0
-                    p_stay_total = row['Postoj'] * days_stay
-                    total_tco = p_exp + p_imp + p_stay_total
+                    total_tco = row['Eksport'] + p_imp + (row['Postoj'] * days_stay)
                     if total_tco < best_tco:
                         best_tco = total_tco
-                        best_data = {'exp': p_exp, 'imp': p_imp, 'stay': row['Postoj'], 'ferry': 0, 'raw_exp': p_exp}
+                        f_cost = cfg.get('FERRY_FTL_SOLO', 522) if target_city in FERRY_CITIES else 0
+                        best_data = {'exp': row['Eksport'], 'imp': p_imp, 'stay': row['Postoj'], 'ferry': f_cost}
                 if best_data: safe_rates[vt] = best_data
 
-    # GENEROWANIE KOMBINACJI (DEDYKOWANE)
+    # Generowanie kombinacji aut (Dedykowany)
     if safe_rates:
-        max_f = math.ceil(weight_brutto / 10500) + 1
-        for f in range(max_f + 1):
+        for f in range(3):
             for s in range(3):
                 for b in range(5):
-                    total_cap = f*10500 + s*5500 + b*1200
-                    if total_cap >= weight_brutto and total_cap <= weight_brutto + 10500:
+                    cap = f*10500 + s*3500 + b*1200
+                    if cap >= weight_brutto and cap <= weight_brutto + 10500:
                         combo = {"FTL": f, "SOLO": s, "BUS": b}
                         c_exp=0; c_imp=0; c_stay=0; c_ata=0; c_ferry=0; v_labels=[]; max_tr=0
                         for v_n, qty in combo.items():
                             if qty == 0 or v_n not in safe_rates: continue
                             r = safe_rates[v_n]
                             v_labels.append(f"{qty}x {v_n}")
-                            c_exp += r['raw_exp'] * qty
+                            c_exp += r['exp'] * qty
                             c_imp += r['imp'] * qty
-                            c_stay += r['stay'] * days_stay * qty
+                            c_stay += (r['stay'] * days_stay) * qty
                             c_ferry += r['ferry'] * qty
                             if target_city in ["Londyn", "Liverpool", "Manchester", "Genewa", "Bazylea"]:
                                 c_ata += cfg.get('ATA_CARNET', 166) * qty
@@ -194,22 +190,19 @@ if not df_baza.empty:
                         final_results.append({
                             "v_label": ", ".join(v_labels),
                             "total": c_exp + c_imp + c_stay + c_ata + c_ferry,
-                            "tr": max_tr, "util": (weight_brutto/total_cap)*100,
-                            "brk": {"Eksport": c_exp, "ATA": c_ata, "Promy": c_ferry, "Import": c_imp, "Postój": c_stay}
+                            "tr": max_tr, "util": (weight_brutto/cap)*100,
+                            "brk": {"Eksport": c_exp, "ATA": c_ata, "Promy": c_ferry}
                         })
                         break
 
-# --- 9. WIDOK GŁÓWNY ---
+# --- 8. WIDOK GŁÓWNY ---
 if final_results:
     res = sorted(final_results, key=lambda x: x['total'])
     best = res[0]
-    
     st.markdown(f'<div class="route-header">KOMORNIKI ➔ {target_city.upper()}</div>', unsafe_allow_html=True)
     
     col_main, col_map = st.columns([1.8, 1])
-    
     with col_main:
-        # GŁÓWNA KARTA CENY
         st.markdown(f"""
             <div class="hero-card">
                 <div style="color:#94a3b8; font-size:12px; font-weight:bold; letter-spacing:1px;">NAJTAŃSZA KOMBINACJA (NETTO)</div>
@@ -222,14 +215,13 @@ if final_results:
             </div>
         """, unsafe_allow_html=True)
         
-        # PIGUŁKI STATUSU
         i1, i2, i3, i4 = st.columns(4)
         i1.markdown(f'<div class="stat-pill">🚚 {best["v_label"]}</div>', unsafe_allow_html=True)
         i2.markdown(f'<div class="stat-pill">⏱️ {best["tr"]} DNI</div>', unsafe_allow_html=True)
         i3.markdown(f'<div class="stat-pill">📦 {best["util"]:.0f}%</div>', unsafe_allow_html=True)
         i4.markdown(f'<div class="stat-pill">📅 {date_start.strftime("%d.%m")}</div>', unsafe_allow_html=True)
         
-        st.markdown("<br><br>### 📊 PORÓWNANIE INNYCH KOMBINACJI", unsafe_allow_html=True)
+        st.markdown("<br>### 📊 PORÓWNANIE INNYCH KOMBINACJI", unsafe_allow_html=True)
         for r in res[:5]:
             st.markdown(f"""
                 <div class="alt-card">
@@ -239,20 +231,32 @@ if final_results:
             """, unsafe_allow_html=True)
 
     with col_map:
-        s_c = CITY_COORDS["Komorniki (Baza)"]
-        e_c = CITY_COORDS.get(target_city, [52, 13])
+        # LOGIKA MAPY (PYDECK)
+        start_coords = CITY_COORDS["Komorniki (Baza)"]
+        end_coords = CITY_COORDS.get(target_city, [13.4, 52.5])
+        
+        arc_data = [{"source": start_coords, "target": end_coords, "name": f"Trasa do {target_city}"}]
+        points_data = [{"coords": start_coords, "name": "Baza"}, {"coords": end_coords, "name": target_city}]
+        
+        view_state = pdk.ViewState(
+            longitude=(start_coords[0] + end_coords[0]) / 2,
+            latitude=(start_coords[1] + end_coords[1]) / 2,
+            zoom=4, pitch=45
+        )
+
         st.pydeck_chart(pdk.Deck(
             map_style="mapbox://styles/mapbox/dark-v10",
-            initial_view_state=pdk.ViewState(latitude=(s_c[0]+e_c[0])/2, longitude=(s_c[1]+e_c[1])/2, zoom=4),
-            layers=[pdk.Layer("ArcLayer", data=[{"s": [s_c[1], s_c[0]], "e": [e_c[1], e_c[0]]}], 
-            get_source_position="s", get_target_position="e", get_source_color=[237, 137, 54], get_target_color=[255, 255, 255], get_width=4)]
+            initial_view_state=view_state,
+            layers=[
+                pdk.Layer(
+                    "ArcLayer", data=arc_data, get_source_position="source", get_target_position="target",
+                    get_source_color=[237, 137, 54, 200], get_target_color=[255, 255, 255, 200], get_width=5
+                ),
+                pdk.Layer(
+                    "ScatterplotLayer", data=points_data, get_position="coords", get_color=[237, 137, 54],
+                    get_radius=30000, pickable=True
+                )
+            ],
+            tooltip={"text": "{name}"}
         ))
-        st.info(f"Rekomendacja: Dla wagi {weight_brutto:,.0f} kg brutto, najkorzystniejszym rozwiązaniem jest: {best['v_label']}.")
-
-# --- 10. ADMIN TOOL ---
-if st.session_state.current_user == "admin":
-    with st.expander("⚙️ NARZĘDZIA ADMINISTRATORA"):
-        st.dataframe(df_baza, use_container_width=True)
-        if st.button("🔄 ODŚWIEŻ DANE Z ARKUSZA"):
-            st.cache_data.clear()
-            st.rerun()
+        st.info(f"Rekomendacja logistyczna: Zestaw {best['v_label']} zapewnia optymalny koszt przy wadze {weight_brutto:,.0f} kg brutto.")
