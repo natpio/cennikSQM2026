@@ -143,7 +143,7 @@ with st.sidebar:
         st.session_state.clear()
         st.rerun()
 
-# --- 8. NOWA LOGIKA OPTYMALIZACJI KOSZTÓW ---
+# --- 8. LOGIKA OPTYMALIZACJI KOSZTÓW ---
 v_types = {"BUS": 1200, "SOLO": 5500, "FTL": 10500}
 final_results = []
 
@@ -154,12 +154,11 @@ if not df_baza.empty:
         if not options.empty:
             options = options.copy()
             
-            # Funkcja pomocnicza do obliczania bazowego kosztu dla selekcji przewoźnika
             def calc_row_base(row):
                 is_sqm = "sqm" in str(row['Przewoznik']).lower()
                 cost = row['Eksport']
                 if trip_type == "TYLKO DOSTAWA (ONE-WAY)":
-                    if is_sqm: cost *= 2  # CENA W KÓŁKU DLA SQM
+                    if is_sqm: cost *= 2 
                 else:
                     cost += row['Import']
                 return cost
@@ -198,13 +197,13 @@ if not df_baza.empty:
                 if not r: continue
                 
                 is_sqm = "sqm" in str(r.get('Przewoznik', '')).lower()
-                v_desc.append(f"{qty}x {v_name} ({r['Przewoznik']})")
+                # ZMODYFIKOWANO: Usunięto nazwę przewoźnika z opisu kombinacji
+                v_desc.append(f"{qty}x {v_name}")
                 
                 tr = TRANSIT_DATA.get(target_city, {}).get("BUS" if v_name=="BUS" else "FTL/SOLO", 2)
                 max_tr = max(max_tr, tr)
                 mult = qty if mode == "DEDYKOWANY" else (weight_brutto / v_types[v_name] / total_qty) * qty
                 
-                # LOGIKA CENY W KÓŁKU DLA SQM ONE-WAY
                 if trip_type == "TYLKO DOSTAWA (ONE-WAY)" and is_sqm:
                     c_exp += (r['Eksport'] * 2) * mult
                     is_kolko_warning = True
@@ -274,6 +273,7 @@ with tab_calc:
             for res in final_results[:5]: 
                 is_win = "alt-best" if res == best else ""
                 kolko_tag = " (KÓŁKO)" if res['kolko'] else ""
+                # ZMODYFIKOWANO: v_label nie zawiera już nazw firm
                 st.markdown(f"""
                     <div class="alt-card {is_win}">
                         <div><b>{res['v_label']}{kolko_tag}</b> (Utylizacja: {res['util']:.0f}%)</div>
