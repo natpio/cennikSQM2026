@@ -144,7 +144,7 @@ with st.sidebar:
         st.rerun()
 
 # --- 8. LOGIKA OPTYMALIZACJI KOSZTÓW ---
-v_types = {"BUS": 1200, "SOLO": 5500, "FTL": 10500}
+v_types = {"BUS": 1100, "SOLO": 3500, "FTL": 10500}
 final_results = []
 
 if not df_baza.empty:
